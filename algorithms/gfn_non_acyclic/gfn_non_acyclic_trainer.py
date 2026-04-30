@@ -42,7 +42,8 @@ def get_checkpoint_dir(cfg):
 
 def get_checkpoint_path(cfg, iter):
     suffix = ""
-    if not cfg.algorithm.model.learn_fwd_corrections:
+    learn_fwd_corrections = cfg.algorithm.model.get("learn_fwd_corrections")
+    if learn_fwd_corrections is not None and (not learn_fwd_corrections):
         suffix = "_small"
     return os.path.join(get_checkpoint_dir(cfg), f"model_params_{iter}{suffix}.pkl")
 

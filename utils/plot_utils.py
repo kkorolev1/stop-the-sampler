@@ -240,7 +240,7 @@ def plot_gradient_trajectory(
 
 
 def marginal_density_grid(
-    target,
+    log_prob_fn,
     dim: int,
     marginal_dims: Tuple[int, int],
     bounds: tuple[float, float],
@@ -254,7 +254,7 @@ def marginal_density_grid(
         xj = jnp.asarray(x_arr)
         _x = jnp.zeros((xj.shape[0], dim))
         _x = _x.at[:, marginal_dims].set(xj)
-        return target.log_prob(_x)
+        return log_prob_fn(_x)
 
     log_probs = sliced_log_prob(x_points)
     log_probs = jnp.clip(log_probs, a_min=-1000, a_max=None)
@@ -289,7 +289,9 @@ def visualize_trajectories(
         xy = np.asarray(jnp.stack([valid[:, d0], valid[:, d1]], axis=1))
         plot_gradient_trajectory(ax, xy, color=color)
 
-    x1d, x2d, zd = marginal_density_grid(target, dim, (d0, d1), bounds, n_points=110)
+    x1d, x2d, zd = marginal_density_grid(
+        target.log_prob, dim, (d0, d1), bounds, n_points=110
+    )
     ax.contourf(
         x1d,
         x2d,

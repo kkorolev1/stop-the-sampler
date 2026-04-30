@@ -20,6 +20,7 @@ from algorithms.gfn_non_acyclic_ml.gfn_non_acyclic_ml_rnd import (
     rnd_eval,
     loss_fn_prefix_tb,
 )
+from algorithms.gfn_non_acyclic.gfn_non_acyclic_trainer import save_model_checkpoint
 from algorithms.gfn_non_acyclic_ml.utils import (
     visualize_heatmaps,
     visualize_level_log_reward,
@@ -53,9 +54,7 @@ def gfn_non_acyclic_ml_trainer(cfg, target, exp=None):
         jnp.zeros(dim), jnp.ones(dim) * alg_cfg.init_std
     )
 
-    betas = jnp.ones((alg_cfg.num_levels,))
-    betas = jnp.cumsum(betas) / jnp.sum(betas)
-    betas = jnp.concatenate([jnp.zeros(1), betas])
+    betas = jnp.linspace(0.0, 1.0, alg_cfg.num_levels + 1)
     print(f"betas: {betas}")
 
     def get_beta(l):
@@ -332,6 +331,7 @@ def gfn_non_acyclic_ml_trainer(cfg, target, exp=None):
                 )
 
             print_results(it, logger, cfg)
+            save_model_checkpoint(cfg, model_state, iter=it)
 
             # if cfg.use_wandb:
             #     wandb.log(extract_last_entry(logger), step=it)
