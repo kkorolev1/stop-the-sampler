@@ -130,10 +130,10 @@ def gfn_non_acyclic_ml_trainer(cfg, target, exp=None):
     loss_fn_base = partial(
         loss_fn_prefix_tb,
         num_levels=alg_cfg.num_levels,
-        compute_level_log_reward=compute_level_log_reward,
         huber_delta=alg_cfg.huber_delta,
         reg_coef=reg_coef,
         use_weights=alg_cfg.use_weights,
+        only_clf_reg=alg_cfg.only_clf_reg,
     )
 
     # Define the function to be JIT-ed for FWD pass

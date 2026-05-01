@@ -260,12 +260,13 @@ def loss_fn_prefix_tb(
             + fwd_clf_log_probs
         )
         log_weights = jax.lax.stop_gradient(log_weights)
-        weights = jnp.exp(
-            log_weights
-            - jax.scipy.special.logsumexp(log_weights, axis=1, keepdims=True)
+        log_weights = log_weights - jax.scipy.special.logsumexp(
+            log_weights, axis=1, keepdims=True
         )
     else:
-        weights = jnp.ones((fwd_clf_logits.shape[0], 1)) / fwd_clf_logits.shape[1]
+        log_weights = jnp.log(
+            jnp.ones((fwd_clf_logits.shape[0], 1)) / fwd_clf_logits.shape[1]
+        )
 
     if huber_delta is not None:
         tb_losses = jnp.where(
@@ -276,17 +277,20 @@ def loss_fn_prefix_tb(
     else:
         tb_losses = jnp.square(discrepancy)
 
-    tb_losses = tb_losses * weights
-    reg_term = jnp.exp(-fwd_clf_log_probs) if only_clf_reg else jnp.exp(log_fs[:, 1:])
-
-    losses = tb_losses.sum(-1) + reg_coef * (reg_term * weights).sum(-1)
+    tb_losses = jnp.exp(jnp.log(tb_losses) + log_weights)
+    reg_terms = jnp.exp(
+        jnp.log(reg_coef)
+        + (-fwd_clf_log_probs if only_clf_reg else log_fs[:, 1:])
+        + log_weights
+    )
+    losses = tb_losses.sum(-1) + reg_terms.sum(-1)
 
     return jnp.mean(losses), (
         trajectories[:, -1],
         jax.lax.stop_gradient(-log_pfs_over_pbs).sum(-1),
         log_rewards,
         jax.lax.stop_gradient(tb_losses),
-        weights,
+        jnp.exp(log_weights),
     )
 
 

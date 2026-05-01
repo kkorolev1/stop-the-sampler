@@ -16,6 +16,7 @@ reg_coef: ${target.gfn_non_acyclic_ml.reg_coef}
 eval_max_steps: ${target.gfn_non_acyclic_ml.eval_max_steps}
 num_levels: ${target.gfn_non_acyclic_ml.num_levels}
 use_weights: True
+only_clf_reg: False
 
 # Learning rate scheduler
 lr_schedule:

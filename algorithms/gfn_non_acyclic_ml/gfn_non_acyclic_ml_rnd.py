@@ -277,10 +277,10 @@ def loss_fn_prefix_tb(
     params: ModelParams,
     rnd_partial: Callable[[RandomKey, TrainState, ModelParams], tuple[Array, ...]],
     num_levels: int,
-    compute_level_log_reward: Callable[Array, Array],
     reg_coef: float = 0.0,
     huber_delta: float | None = None,
     use_weights: bool = True,
+    only_clf_reg: bool = False,
 ):
     (trajectories, log_rewards, log_pfs_over_pbs, fwd_clf_logits, log_fs) = rnd_partial(
         key, model_state, params
@@ -313,31 +313,34 @@ def loss_fn_prefix_tb(
     fwd_clf_logits_levels = fwd_clf_logits.reshape(
         batch_size, num_levels, steps_per_level
     )
+    fwd_clf_log_probs_levels = jax.nn.log_sigmoid(fwd_clf_logits_levels)
 
     if use_weights:
-        log_weights = jnp.cumsum(
-            jnp.concatenate(
-                [
-                    jnp.zeros(
-                        (
-                            fwd_clf_logits_levels.shape[0],
-                            fwd_clf_logits_levels.shape[1],
-                            1,
-                        )
-                    ),
-                    jax.nn.log_sigmoid(-fwd_clf_logits_levels)[:, :, :-1],
-                ],
+        log_weights = (
+            jnp.cumsum(
+                jnp.concatenate(
+                    [
+                        jnp.zeros(
+                            (
+                                fwd_clf_logits_levels.shape[0],
+                                fwd_clf_logits_levels.shape[1],
+                                1,
+                            )
+                        ),
+                        jax.nn.log_sigmoid(-fwd_clf_logits_levels)[:, :, :-1],
+                    ],
+                    axis=2,
+                ),
                 axis=2,
-            ),
-            axis=2,
-        ) + jax.nn.log_sigmoid(fwd_clf_logits_levels)
+            )
+            + fwd_clf_log_probs_levels
+        )
         log_weights = jax.lax.stop_gradient(log_weights)
-        weights = jnp.exp(
-            log_weights
-            - jax.scipy.special.logsumexp(log_weights, axis=2, keepdims=True)
+        log_weights = log_weights - jax.scipy.special.logsumexp(
+            log_weights, axis=2, keepdims=True
         )
     else:
-        weights = (
+        log_weights = jnp.log(
             jnp.ones(
                 (fwd_clf_logits_levels.shape[0], fwd_clf_logits_levels.shape[1], 1)
             )
@@ -353,8 +356,13 @@ def loss_fn_prefix_tb(
     else:
         tb_losses = jnp.square(discrepancy)
 
-    tb_losses = (tb_losses * weights).sum(-1).mean(-1)
-    losses = tb_losses + reg_coef * (jnp.exp(log_fs_levels) * weights).sum(-1).mean(-1)
+    tb_losses = jnp.exp(jnp.log(tb_losses) + log_weights)
+    reg_terms = jnp.exp(
+        jnp.log(reg_coef)
+        + (-fwd_clf_log_probs_levels if only_clf_reg else log_fs_levels)
+        + log_weights
+    )
+    losses = tb_losses.sum(-1).sum(-1) + reg_terms.sum(-1).sum(-1)
 
     return jnp.mean(losses), (
         trajectories[:, -1],
