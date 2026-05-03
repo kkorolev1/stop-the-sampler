@@ -297,18 +297,21 @@ def loss_fn_prefix_tb(
 
     # L constants
     logZ_levels = params["params"]["logZ"]
-    logZ_levels = jnp.concatenate(
-        [jnp.zeros([1], dtype=logZ_levels.dtype), logZ_levels], axis=0
-    )[None, :, None]
+    # logZ_levels = jnp.concatenate(
+    #     [jnp.zeros([1], dtype=logZ_levels.dtype), logZ_levels], axis=0
+    # )[None, :, None]
+    # Experimental
+    logZ_diff_levels = logZ_levels[None, :, None]
 
     log_fs_levels = log_fs.reshape(batch_size, num_levels, steps_per_level)
 
-    discrepancy = (
-        log_pfs_over_pbs_cumsum_levels
-        - logZ_levels[:, :-1]
-        - log_fs_levels
-        + logZ_levels[:, 1:]
-    )
+    # discrepancy = (
+    #     log_pfs_over_pbs_cumsum_levels
+    #     - logZ_levels[:, :-1]
+    #     - log_fs_levels
+    #     + logZ_levels[:, 1:]
+    # )
+    discrepancy = log_pfs_over_pbs_cumsum_levels - log_fs_levels + logZ_diff_levels
 
     fwd_clf_logits_levels = fwd_clf_logits.reshape(
         batch_size, num_levels, steps_per_level

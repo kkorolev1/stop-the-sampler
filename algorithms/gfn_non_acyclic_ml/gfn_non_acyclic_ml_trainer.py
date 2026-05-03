@@ -295,7 +295,7 @@ def gfn_non_acyclic_ml_trainer(cfg, target, exp=None):
                 {
                     "loss": jnp.mean(losses),
                     ("loss_fwd" if is_on_policy_iter else "loss_bwd"): jnp.mean(losses),
-                    "logZ_learned": model_state.params["params"]["logZ"][-1],
+                    "logZ_learned": model_state.params["params"]["logZ"].sum(),
                     "params_l2_norm": params_norm,
                     "grads_l2_norm": grads_norm,
                 },
