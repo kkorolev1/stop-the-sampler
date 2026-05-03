@@ -21,6 +21,7 @@ class NonAcyclicNet(nn.Module):
     shared_model: bool = False
 
     min_clf_logits: float = -100.0
+    mean_clip: float = 10.0
 
     def setup(self):
         self.fwd_pred_dim = (
@@ -120,7 +121,7 @@ class NonAcyclicNet(nn.Module):
             fwd_mean = s + lgv_term * self.gamma
             fwd_scale = jnp.sqrt(2 * self.gamma)
 
-        fwd_mean = jnp.clip(fwd_mean, -self.outer_clip, self.outer_clip)
+        fwd_mean = jnp.clip(fwd_mean, -self.mean_clip, self.mean_clip)
         fwd_clf_logits = fwd_clf_logits.squeeze(-1)
         fwd_clf_logits = jnp.clip(fwd_clf_logits, min=self.min_clf_logits)
 
@@ -149,7 +150,7 @@ class NonAcyclicNet(nn.Module):
         bwd_scale = jnp.sqrt(
             jnp.exp(self.bwd_log_var_range * nn.tanh(bwd_scale_corr)) * self.gamma
         )
-        bwd_mean = jnp.clip(bwd_mean, -self.outer_clip, self.outer_clip)
+        bwd_mean = jnp.clip(bwd_mean, -self.mean_clip, self.mean_clip)
         bwd_clf_logits = bwd_clf_logits.squeeze(-1)
         bwd_clf_logits = jnp.clip(bwd_clf_logits, min=self.min_clf_logits)
 

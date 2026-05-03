@@ -19,6 +19,9 @@ class NonAcyclicNetML(nn.Module):
     fwd_log_var_range: float = 4.0
     bwd_log_var_range: float = 4.0
 
+    min_clf_logits: float = -100.0
+    mean_clip: float = 10.0
+
     def setup(self):
         self.level_phase = self.param(
             "level_phase", nn.initializers.zeros_init(), (1, self.num_hid)
@@ -106,8 +109,9 @@ class NonAcyclicNetML(nn.Module):
             jnp.exp(self.fwd_log_var_range * nn.tanh(fwd_scale_corr)) * self.gamma
         )
 
-        fwd_mean = jnp.clip(fwd_mean, -self.outer_clip, self.outer_clip)
+        fwd_mean = jnp.clip(fwd_mean, -self.mean_clip, self.mean_clip)
         fwd_clf_logits = fwd_clf_logits.squeeze(-1)
+        fwd_clf_logits = jnp.clip(fwd_clf_logits, min=self.min_clf_logits)
 
         # if force_stop:
         #     fwd_clf_logits = jnp.full_like(fwd_clf_logits, 100.0)
@@ -130,8 +134,9 @@ class NonAcyclicNetML(nn.Module):
         bwd_scale = jnp.sqrt(
             jnp.exp(self.bwd_log_var_range * nn.tanh(bwd_scale_corr)) * self.gamma
         )
-        bwd_mean = jnp.clip(bwd_mean, -self.outer_clip, self.outer_clip)
+        bwd_mean = jnp.clip(bwd_mean, -self.mean_clip, self.mean_clip)
         bwd_clf_logits = bwd_clf_logits.squeeze(-1)
+        bwd_clf_logits = jnp.clip(bwd_clf_logits, min=self.min_clf_logits)
 
         # if force_stop:
         #     bwd_clf_logits = jnp.full_like(bwd_clf_logits, 100.0)
