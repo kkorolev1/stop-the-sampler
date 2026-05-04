@@ -613,7 +613,7 @@ def visualize_levels(
         levels_counts[i] = np.bincount(masked_levels[i], minlength=num_levels + 1)
     levels_counts = levels_counts[:, 1:]
     levels_mean_counts = np.mean(levels_counts, axis=0)
-    ax.bar(np.arange(1, num_levels + 1), levels_mean_counts, width=0.75, align="center")
+    ax.bar(np.arange(1, num_levels + 1), levels_mean_counts)
     ax.set_xlabel("Level")
     ax.set_ylabel("Mean length")
     ax.set_title("Mean length over levels")
