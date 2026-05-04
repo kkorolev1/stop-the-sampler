@@ -593,3 +593,33 @@ def visualize_kernel_std(
     else:
         plt.close()
     return wb
+
+
+def visualize_levels(
+    levels, trajectories_length, cfg, prefix="", show=False, fig=None, ax=None
+):
+    if fig is None or ax is None:
+        fig = plt.figure(figsize=(6, 6))
+        ax = fig.add_subplot()
+
+    levels = np.asarray(levels)
+    trajectories_length = np.asarray(trajectories_length)
+    B, L = levels.shape
+    mask = np.arange(L)[None, :] < trajectories_length[:, None]
+    masked_levels = np.where(mask, levels, 0)
+    num_levels = cfg.algorithm.num_levels
+    levels_counts = np.zeros((B, num_levels + 1), dtype=int)
+    for i in range(B):
+        levels_counts[i] = np.bincount(masked_levels[i], minlength=num_levels + 1)
+    levels_counts = levels_counts[:, 1:]
+    levels_mean_counts = np.mean(levels_counts, axis=0)
+    ax.bar(np.arange(1, num_levels + 1), levels_mean_counts, width=0.75, align="center")
+    ax.set_xlabel("Level")
+    ax.set_ylabel("Mean length")
+    ax.set_title("Mean length over levels")
+    wb = {f"figures/{prefix + '_' if prefix else ''}vis": [wandb.Image(fig)]}
+    if show:
+        plt.show()
+    else:
+        plt.close()
+    return wb

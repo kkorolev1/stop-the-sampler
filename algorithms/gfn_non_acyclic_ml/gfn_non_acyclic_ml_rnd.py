@@ -372,6 +372,7 @@ def loss_fn_prefix_tb(
         jax.lax.stop_gradient(-log_pfs_over_pbs).sum(-1),
         log_rewards,
         jax.lax.stop_gradient(tb_losses),
+        jnp.exp(log_weights).reshape(batch_size, num_steps),
     )
 
 
@@ -421,7 +422,7 @@ def per_sample_rnd_eval(
     def simulate_prior_to_target(carry, force_stop=False):
         state, state_hist = carry
         s, l, is_terminal, key_gen, step = state
-        trajectories, terminals_mask, fwd_log_probs, bwd_log_probs = state_hist
+        trajectories, terminals_mask, levels, fwd_log_probs, bwd_log_probs = state_hist
 
         s = jax.lax.stop_gradient(s)
         log_reward, langevin = compute_log_reward_and_langevin(s, l)
@@ -464,6 +465,7 @@ def per_sample_rnd_eval(
 
         trajectories = trajectories.at[step].set(s)
         terminals_mask = terminals_mask.at[step].set(is_terminal)
+        levels = levels.at[step].set(l)
         fwd_log_probs = fwd_log_probs.at[step].set(fwd_log_prob)
         bwd_log_probs = bwd_log_probs.at[step].set(bwd_log_prob)
 
@@ -471,6 +473,7 @@ def per_sample_rnd_eval(
         state_hist = (
             trajectories,
             terminals_mask,
+            levels,
             fwd_log_probs,
             bwd_log_probs,
         )
@@ -479,7 +482,7 @@ def per_sample_rnd_eval(
     def simulate_target_to_prior(carry, force_stop=False):
         state, state_hist = carry
         s_next, l_next, is_terminal_next, key_gen, step = state
-        trajectories, terminals_mask, fwd_log_probs, bwd_log_probs = state_hist
+        trajectories, terminals_mask, levels, fwd_log_probs, bwd_log_probs = state_hist
         s_next = jax.lax.stop_gradient(s_next)
         bwd_clf_logits, bwd_mean, bwd_scale = model_backward(
             s_next,
@@ -525,6 +528,7 @@ def per_sample_rnd_eval(
 
         trajectories = trajectories.at[step].set(s)
         terminals_mask = terminals_mask.at[step].set(is_terminal)
+        levels = levels.at[step].set(l)
         fwd_log_probs = fwd_log_probs.at[step].set(fwd_log_prob)
         bwd_log_probs = bwd_log_probs.at[step].set(bwd_log_prob)
 
@@ -532,6 +536,7 @@ def per_sample_rnd_eval(
         state_hist = (
             trajectories,
             terminals_mask,
+            levels,
             fwd_log_probs,
             bwd_log_probs,
         )
@@ -540,9 +545,10 @@ def per_sample_rnd_eval(
     d = input_state.shape[-1]
     trajectories = jnp.zeros((num_steps + num_levels, d))
     terminals_mask = jnp.ones((num_steps + num_levels,), dtype=bool)
+    levels = jnp.ones((num_steps + num_levels,), dtype=int)
     fwd_log_probs = jnp.zeros((num_steps + num_levels,))
     bwd_log_probs = jnp.zeros((num_steps + num_levels,))
-    state_hist = (trajectories, terminals_mask, fwd_log_probs, bwd_log_probs)
+    state_hist = (trajectories, terminals_mask, levels, fwd_log_probs, bwd_log_probs)
     init_level = jnp.array(1) if prior_to_target else jnp.array(num_levels)
     state_init = (input_state, init_level, jnp.array(False), key, 0)
     carry = (state_init, state_hist)
@@ -594,7 +600,7 @@ def rnd_eval(
         input_states = terminal_xs
 
     keys = jax.random.split(key_gen, num=batch_size)
-    trajectories, terminals_mask, fwd_log_probs, bwd_log_probs = jax.vmap(
+    trajectories, terminals_mask, levels, fwd_log_probs, bwd_log_probs = jax.vmap(
         per_sample_rnd_eval,
         in_axes=(0, None, None, 0, None, None, None, None, None, None, None),
     )(
@@ -635,9 +641,11 @@ def rnd_eval(
         trajectories_length = (~terminals_mask).sum(axis=1) + 1
         trajectories = trajectories[:, ::-1]
         terminals_mask = terminals_mask[:, ::-1]
+        levels = levels[:, ::-1]
 
         indices = (~terminals_mask).argsort(axis=1, descending=True, stable=True)
         trajectories = jnp.take_along_axis(trajectories, indices[:,:,None], axis=1)
+        levels = jnp.take_along_axis(levels, indices[:, :], axis=1)
 
         if log_rewards is None:
             log_rewards = target.log_prob(terminal_xs)
@@ -656,6 +664,9 @@ def rnd_eval(
         trajectories = trajectories.at[jnp.arange(trajectories.shape[0]), trajectories_length - 1].set(
             terminal_xs
         )
+        levels = levels.at[jnp.arange(levels.shape[0]), trajectories_length - 1].set(
+            num_levels
+        )
 
     if log_rewards is None:
         log_rewards = target.log_prob(terminal_xs)
@@ -665,6 +676,7 @@ def rnd_eval(
         running_costs,
         log_rewards,
         trajectories_length,
+        levels,
     )
 
 

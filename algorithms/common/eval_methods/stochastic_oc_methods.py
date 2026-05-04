@@ -11,7 +11,7 @@ from eval.utils import (
     save_samples,
 )
 
-from utils.plot_utils import visualize_trajectories
+from utils.plot_utils import visualize_trajectories, visualize_levels
 
 
 def get_eval_fn(rnd, target, target_xs, cfg, visualize_heatmaps_fn=None):
@@ -46,8 +46,10 @@ def get_eval_fn(rnd, target, target_xs, cfg, visualize_heatmaps_fn=None):
             trajectories,
             running_costs,
             _,
-            trajectories_length,
+            *aux,
         ) = rnd_reverse(key, model_state, *params)
+        trajectories_length = aux[0]
+        levels = aux[1] if len(aux) == 2 else None
         samples = trajectories[
             jnp.arange(trajectories.shape[0]), trajectories_length - 1
         ]
@@ -63,8 +65,10 @@ def get_eval_fn(rnd, target, target_xs, cfg, visualize_heatmaps_fn=None):
                 fwd_trajectories,
                 fwd_running_costs,
                 _,
-                fwd_trajectories_length,
-            ) = rnd_forward(jax.random.PRNGKey(0), model_state, *params)[:5]
+                *fwd_aux,
+            ) = rnd_forward(jax.random.PRNGKey(0), model_state, *params)
+            fwd_trajectories_length = fwd_aux[0]
+            fwd_levels = fwd_aux[1] if len(fwd_aux) == 2 else None
             fwd_log_is_weights = -fwd_running_costs
             eubo = jnp.mean(fwd_log_is_weights)
             logger["KL/eubo"].append(eubo)
@@ -83,6 +87,9 @@ def get_eval_fn(rnd, target, target_xs, cfg, visualize_heatmaps_fn=None):
                 prefix="trajectories_fwd",
             )
         )
+        logger.update(
+            visualize_levels(levels, trajectories_length, cfg, prefix="levels_fwd")
+        )
         if cfg.compute_forward_metrics and target.can_sample:
             logger.update(
                 visualize_trajectories(
@@ -91,6 +98,11 @@ def get_eval_fn(rnd, target, target_xs, cfg, visualize_heatmaps_fn=None):
                     target,
                     dims=(0, 1),
                     prefix="trajectories_bwd",
+                )
+            )
+            logger.update(
+                visualize_levels(
+                    fwd_levels, fwd_trajectories_length, cfg, prefix="levels_bwd"
                 )
             )
 
