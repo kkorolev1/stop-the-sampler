@@ -51,7 +51,7 @@ gfn_subtb: # Sub-Trajectory Balance
   flow_num_hid: 64
 
 gfn_non_acyclic:
-  init_std: 1.0
+  init_std: 3.0
   weight_decay: 0.0
   step_size: 1e-4
   bwd_step_size: 1e-4
@@ -67,7 +67,7 @@ gfn_non_acyclic:
   grad_clip: 0.001
 
 gfn_non_acyclic_ml:
-  init_std: 1.0
+  init_std: 3.0
   weight_decay: 0.0
   step_size: 1e-4
   bwd_step_size: 1e-4

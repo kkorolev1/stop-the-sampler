@@ -123,7 +123,9 @@ def load_model_nice(dataset: str, dim: int):
     im_size = int(jnp.sqrt(dim))
 
     pickle_file = (
-        project_path() + "/targets/data/" + f"params_nice_{dataset}_{im_size}x{im_size}_flax.pkl"
+        project_path()
+        + "/targets/data/"
+        + f"params_nice_{dataset}_{im_size}x{im_size}_flax.pkl"
     )
     loaded_params = pickle.load(open(pickle_file, "rb"))
 
@@ -148,8 +150,11 @@ class NiceTarget(Target):
         super().__init__(dim, log_Z, can_sample)
         self.data_ndim = dim
         self.im_size = int(np.sqrt(dim))
+        self._plot_bound = 1.0
 
-        self.logpx_fn_without_rng, _, self.sample_fn_clean = load_model_nice(dataset, dim)
+        self.logpx_fn_without_rng, _, self.sample_fn_clean = load_model_nice(
+            dataset, dim
+        )
 
         state = checkpoints.restore_checkpoint(
             ckpt_dir=project_path("utils/mode_classifier"),
@@ -252,7 +257,19 @@ if __name__ == "__main__":
         "dds2",
         "gsb",
     ]
-    algs = ["gmmvi_jax", "smc", "aft", "craft", "fab", "mcd", "ldvi", "pis2", "dis", "dds2", "gsb"]
+    algs = [
+        "gmmvi_jax",
+        "smc",
+        "aft",
+        "craft",
+        "fab",
+        "mcd",
+        "ldvi",
+        "pis2",
+        "dis",
+        "dds2",
+        "gsb",
+    ]
     algs = ["gmmvi_jax"]
     #### Generate Digit Visualizations
     nice = NiceTarget(dim=196)

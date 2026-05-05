@@ -1,0 +1,74 @@
+name: nice_fashion
+dim: 784
+has_entropy: True
+
+fn:
+  _target_: targets.nice.NiceTarget
+  dataset: fashion_mnist
+  dim: ${target.dim}
+  log_Z: 0.
+  can_sample: True
+  sample_bounds: None
+
+# Experiment-specific algorithm parameters
+# ----------------------------------------
+
+pis: # Path Integral Sampler
+  max_diffusion: 20. # Divided by 4 roughly gives the initial scale
+  step_size: 5e-4
+
+dis: # Time-reversed Diffusion Sampler
+  initial_scale: 5.
+  step_size: 5e-4
+
+dds: # Denoising Diffusion Sampler
+  initial_scale: 5.
+  step_size: 5e-4
+
+gfn: # Generative Flow Networks
+  max_diffusion: 20. # Divided by 4 roughly gives the initial scale
+  step_size: 5e-4
+
+gfn_non_acyclic:
+  init_std: 5.0
+  weight_decay: 0.0
+  step_size: 1e-3
+  bwd_step_size: 1e-3
+  logZ_step_size: 1e-1
+  init_logZ: 0.
+  gamma: 0.1
+  reg_coef: 1.0
+  num_steps: 100
+  eval_max_steps: 500
+  loss_type: tb
+  logr_clip: -1e5
+  huber_delta: null
+  grad_clip: 1.0
+
+gfn_non_acyclic_ml:
+  init_std: 5.0
+  weight_decay: 0.0
+  step_size: 1e-3
+  bwd_step_size: 1e-3
+  logZ_step_size: 1e-1
+  init_logZ: 0.
+  gamma: 0.1
+  reg_coef: 1.0
+  num_steps: 100
+  eval_max_steps: 500
+  logr_clip: -1e5
+  huber_delta: null
+  grad_clip: 1.0
+  num_levels: 2
+
+all: # Parameters that are shared between all algorithms
+  batch_size: 1000
+  iters: 50000
+  milestones: [10000, 20000, 30000, 40000]
+  num_steps: 64
+  use_lp: True
+  num_hid: 128
+  fwd_log_var_range: 4
+  bwd_log_var_range: 4
+  outer_clip: 1e1
+  inner_clip: 1e2
