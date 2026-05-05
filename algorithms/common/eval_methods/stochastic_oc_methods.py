@@ -87,9 +87,10 @@ def get_eval_fn(rnd, target, target_xs, cfg, visualize_heatmaps_fn=None):
                 prefix="trajectories_fwd",
             )
         )
-        logger.update(
-            visualize_levels(levels, trajectories_length, cfg, prefix="levels_fwd")
-        )
+        if levels is not None:
+            logger.update(
+                visualize_levels(levels, trajectories_length, cfg, prefix="levels_fwd")
+            )
         if cfg.compute_forward_metrics and target.can_sample:
             logger.update(
                 visualize_trajectories(
@@ -100,11 +101,12 @@ def get_eval_fn(rnd, target, target_xs, cfg, visualize_heatmaps_fn=None):
                     prefix="trajectories_bwd",
                 )
             )
-            logger.update(
-                visualize_levels(
-                    fwd_levels, fwd_trajectories_length, cfg, prefix="levels_bwd"
+            if fwd_levels is not None:
+                logger.update(
+                    visualize_levels(
+                        fwd_levels, fwd_trajectories_length, cfg, prefix="levels_bwd"
+                    )
                 )
-            )
 
         for d in cfg.discrepancies:
             logger[f"discrepancies/{d}"].append(
