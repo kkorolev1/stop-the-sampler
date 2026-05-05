@@ -97,3 +97,4 @@ all: # Parameters that are shared between all algorithms
   bwd_log_var_range: 2
   outer_clip: 2e1
   inner_clip: 1e1
+  mean_clip: 10.0

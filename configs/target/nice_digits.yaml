@@ -71,5 +71,6 @@ all: # Parameters that are shared between all algorithms
   num_hid: 128
   fwd_log_var_range: 4
   bwd_log_var_range: 4
+  mean_clip: 5.0
   outer_clip: 1e1
   inner_clip: 1e2

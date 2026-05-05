@@ -35,6 +35,7 @@ model:
   bwd_log_var_range: ${target.all.bwd_log_var_range}
   outer_clip: ${target.all.outer_clip}
   inner_clip: ${target.all.inner_clip}
+  mean_clip: ${target.all.mean_clip}
 
 buffer:
   use: True

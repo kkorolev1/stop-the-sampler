@@ -150,7 +150,7 @@ class NiceTarget(Target):
         super().__init__(dim, log_Z, can_sample)
         self.data_ndim = dim
         self.im_size = int(np.sqrt(dim))
-        self._plot_bound = 1.0
+        self._plot_bound = 5.0
 
         self.logpx_fn_without_rng, _, self.sample_fn_clean = load_model_nice(
             dataset, dim
@@ -273,10 +273,14 @@ if __name__ == "__main__":
     algs = ["gmmvi_jax"]
     #### Generate Digit Visualizations
     nice = NiceTarget(dim=196)
-    for alg in algs:
-        path = project_path(f"samples/digits/samples_{alg}_nice_digits_196D_seed1.npy")
-        samples = jnp.load(path)
-        nice.visualise(samples, show=True, prefix=f"{alg}_digits")
+    samples = nice.sample(jax.random.PRNGKey(0), (1000,))
+    print(samples.min(), samples.max())
+    nice.visualise(samples, show=True, prefix="nice_digits")
+    # for alg in algs:
+    #     path = project_path(f"samples/digits/samples_{alg}_nice_digits_196D_seed1.npy")
+    #     samples = jnp.load(path)
+    #     nice.visualise(samples, show=True, prefix=f"{alg}_digits")
+    #     print(samples.min(), samples.max())
 
     # #### Generate Fashion Visualizations
     # nice = NiceTarget(dataset='fashion_mnist', dim=784)
