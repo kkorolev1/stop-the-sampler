@@ -13,7 +13,7 @@ from omegaconf import OmegaConf
 import wandb
 
 from algorithms.common.diffusion_related.init_model import init_model_non_acyclic
-from algorithms.common.eval_methods.stochastic_oc_methods import get_eval_fn
+from algorithms.common.eval_methods.non_acyclic_methods import get_eval_fn
 from algorithms.gfn_non_acyclic.buffer import build_terminal_state_buffer
 from algorithms.gfn_non_acyclic.gfn_non_acyclic_rnd import (
     rnd_train,

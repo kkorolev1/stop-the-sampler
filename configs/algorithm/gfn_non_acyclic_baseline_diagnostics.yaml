@@ -1,0 +1,80 @@
+# Generative Flow Networks (GFN) with Trajectory Balance (TB) loss
+name: gfn_non_acyclic_baseline_diagnostics
+step_size: ${target.gfn_non_acyclic.step_size}
+bwd_step_size: ${target.gfn_non_acyclic.bwd_step_size}
+batch_size: ${target.all.batch_size}
+iters: ${target.all.iters}
+num_steps: ${target.gfn_non_acyclic.num_steps}
+grad_clip: ${target.gfn_non_acyclic.grad_clip}
+weight_decay: ${target.gfn_non_acyclic.weight_decay}
+loss_type: ${target.gfn_non_acyclic.loss_type}
+n_chunks: ${target.gfn_non_acyclic.num_steps}
+init_logZ: ${target.gfn_non_acyclic.init_logZ}
+logZ_step_size: ${target.gfn_non_acyclic.logZ_step_size}
+init_std: ${target.gfn_non_acyclic.init_std}  # for ou
+logr_clip: ${target.gfn_non_acyclic.logr_clip}
+huber_delta: ${target.gfn_non_acyclic.huber_delta}
+reg_coef: ${target.gfn_non_acyclic.reg_coef}
+eval_max_steps: ${target.gfn_non_acyclic.eval_max_steps}
+step_name: "ula"
+
+gammas: [0.01, 0.1, 0.5]
+
+# Set to false to skip MMD 
+compute_mmd: true
+
+# Early stopping diagnostics for baseline chains.
+# Main threshold uses modern conservative guidance: R-hat < 1.01.
+# Stan also recommends at least 4 chains and interpreting < 1.01 as fully converged.
+# Older/looser practice often used 1.05; 1.10 is only a rough exploratory tolerance.
+early_stop:
+  min_chain_length: 20
+  n_checkpoints: 25
+  rhat:
+    threshold: 1.1
+  geweke:
+    frac1: 0.1
+    frac2: 0.5
+    spectral_estimator: ar  # ar | batchmeans | iid
+    max_frac_gt_1p96: 0.05
+    max_frac_gt_2p58: 0.01
+    max_abs_z_threshold: 4.0
+  # 95% empirical CIs from chain-batching for the ULA
+  batches:
+    n_batches: 4
+    alpha: 0.05
+
+# Learning rate scheduler
+lr_schedule:
+  type: multistep  # multistep | cosine | constant
+  milestones: ${target.all.milestones}  # iteration indices at which to decay
+  gamma: 0.3  # multiply LR by gamma at each milestone
+
+defaults:
+  - model: non_acyclic_net
+
+model:
+  num_hid: ${target.all.num_hid}
+  weight_init: 1e-8  # Initialization of the last layers' weights of the time-dependent network
+  bias_init: 0.1  # Initialization of the last layers' bias of the time-dependent network
+  gamma: ${target.gfn_non_acyclic.gamma}
+  learn_fwd_corrections: False
+  shared_model: False
+
+buffer:
+  use: True
+  max_length_in_batches: 100
+  prioritize_by: "reward"  # none, reward, loss, uiw, piw
+  target_ess: 0.05
+  sampling_method: "systematic"  # multinomial, stratified, systematic, rank
+  rank_k: 0.01  # only used if sampling_method is rank
+  sample_with_replacement: True
+  prefill_steps: 100  # collect `prefill_steps` batches before starting training
+  bwd_to_fwd_ratio: 2  # number of bwd steps per fwd step
+  update_score: False
+
+local_search:
+  use: True
+  cycle: 25
+  gamma: 1e-3
+  num_steps: 300
