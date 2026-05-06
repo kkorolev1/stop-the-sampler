@@ -19,7 +19,7 @@ from eval.utils import extract_last_entry
 from utils.print_utils import print_results
 
 
-def dds_trainer(cfg, target):
+def dds_trainer(cfg, target, exp=None):
     key_gen = jax.random.PRNGKey(cfg.seed)
     dim = target.dim
     alg_cfg = cfg.algorithm
@@ -81,5 +81,14 @@ def dds_trainer(cfg, target):
             logger.update(eval_fn(model_state, key))
             print_results(step, logger, cfg)
 
-            if cfg.use_wandb:
-                wandb.log(extract_last_entry(logger), step=step)
+            # if cfg.use_wandb:
+            #     wandb.log(extract_last_entry(logger), step=step)
+            if cfg.use_cometml:
+                last_entry = extract_last_entry(logger)
+                metrics = {}
+                for key, value in last_entry.items():
+                    if isinstance(value, wandb.Image):
+                        exp.log_image(value.image, name=key, step=step)
+                    else:
+                        metrics[key] = value
+                exp.log_metrics(metrics, step=step)

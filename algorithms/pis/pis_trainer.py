@@ -19,7 +19,7 @@ from eval.utils import extract_last_entry
 from utils.print_utils import print_results
 
 
-def pis_trainer(cfg, target):
+def pis_trainer(cfg, target, exp=None):
     key_gen = jax.random.PRNGKey(cfg.seed)
     dim = target.dim
     alg_cfg = cfg.algorithm
@@ -35,7 +35,9 @@ def pis_trainer(cfg, target):
     key, key_gen = jax.random.split(key_gen)
     model_state = init_model(key, dim, alg_cfg)
 
-    loss = jax.jit(jax.grad(neg_elbo, 2, has_aux=True), static_argnums=(3, 4, 5, 6, 7, 8))
+    loss = jax.jit(
+        jax.grad(neg_elbo, 2, has_aux=True), static_argnums=(3, 4, 5, 6, 7, 8)
+    )
     rnd_short = partial(
         rnd,
         batch_size=cfg.eval_samples,
@@ -78,5 +80,14 @@ def pis_trainer(cfg, target):
             logger.update(eval_fn(model_state, key))
             print_results(step, logger, cfg)
 
-            if cfg.use_wandb:
-                wandb.log(extract_last_entry(logger), step=step)
+            # if cfg.use_wandb:
+            #     wandb.log(extract_last_entry(logger), step=step)
+            if cfg.use_cometml:
+                last_entry = extract_last_entry(logger)
+                metrics = {}
+                for key, value in last_entry.items():
+                    if isinstance(value, wandb.Image):
+                        exp.log_image(value.image, name=key, step=step)
+                    else:
+                        metrics[key] = value
+                exp.log_metrics(metrics, step=step)
