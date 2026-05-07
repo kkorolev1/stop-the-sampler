@@ -1,5 +1,3 @@
-# Title
-
 This repository is based on the [code](https://github.com/DenisBless/variational_sampling_methods) of Blessing et al. (2024) from their paper "[Beyond ELBOs: A Large-Scale Evaluation of Variational Methods for Sampling](https://arxiv.org/abs/2406.07423)".
 
 ## Installation

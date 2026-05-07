@@ -134,6 +134,12 @@ def get_train_fn(alg_name):
         )
 
         return gfn_non_acyclic_baseline
+    elif alg_name == "gfn_non_acyclic_baseline_diagnostics":
+        from algorithms.gfn_non_acyclic.gfn_non_acyclic_baseline_diagnostics import (
+            gfn_non_acyclic_baseline_diagnostics,
+        )
+
+        return gfn_non_acyclic_baseline_diagnostics
     elif alg_name == "gfn_non_acyclic_ml":
         from algorithms.gfn_non_acyclic_ml.gfn_non_acyclic_ml_trainer import (
             gfn_non_acyclic_ml_trainer,
