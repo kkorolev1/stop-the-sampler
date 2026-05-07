@@ -14,15 +14,15 @@ fn:
 # ----------------------------------------
 
 pis: # Path Integral Sampler
-  max_diffusion: 20. # Divided by 4 roughly gives the initial scale
+  init_std: 20. # Divided by 4 roughly gives the initial scale
   step_size: 5e-4
 
 dis: # Time-reversed Diffusion Sampler
-  initial_scale: 5.
+  init_std: 5.
   step_size: 5e-4
 
 dds: # Denoising Diffusion Sampler
-  initial_scale: 5.
+  init_std: 5.
   step_size: 5e-4
 
 gfn: # Generative Flow Networks
