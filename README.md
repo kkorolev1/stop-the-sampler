@@ -13,8 +13,8 @@ Sampling from complex, unnormalized probability densities is a fundamental chall
 
 We recommend using the conda (or mamba) environment to install the dependencies.
 ```bash
-conda create -n gfn-smc-jax python=3.10.14
-conda activate gfn-smc-jax
+conda create -n stop-the-sampler python=3.10.14
+conda activate stop-the-sampler
 ```
 
 Install the jax and jaxlib with the appropriate CUDA version or TPU support, e.g., cuda12
@@ -43,3 +43,4 @@ python run.py algorithm=<algorithm_name> target=<target_name>
 - `gaussian_mixture9`
 - `funnel`
 - `many_well`
+- `nice_digits`
