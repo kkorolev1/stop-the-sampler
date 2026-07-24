@@ -75,13 +75,22 @@ if __name__ == "__main__":
     germanCredit = GermanCredit()
 
     key = jax.random.PRNGKey(42)
-    samples = jnp.zeros(shape=(1, 25))
-    print(samples)
-    print(germanCredit.log_prob(samples))
-    print(jax.vmap(germanCredit.log_prob)(samples))
 
-    # grad
-    log_prob_grad = jax.vmap(jax.grad(germanCredit.log_prob))(samples)
-    print(log_prob_grad)
+    num_samples = 100_000
+    dim = 25
+    bounds = 20
+    samples = jax.random.uniform(key, (num_samples, dim), minval=-bounds, maxval=bounds)
 
-    print((germanCredit.sample(key, (5,))).shape)
+    # Calculate log probabilities
+    log_probs = jax.vmap(germanCredit.log_prob)(samples)
+
+    # Compute statistics: min, mean, max
+    min_log_prob = jnp.min(log_probs)
+    mean_log_prob = jnp.mean(log_probs)
+    max_log_prob = jnp.max(log_probs)
+    std_log_prob = jnp.std(log_probs)
+
+    print(f"min:  {float(min_log_prob):.4f}")
+    print(f"mean: {float(mean_log_prob):.4f}")
+    print(f"std: {float(std_log_prob):.4f}")
+    print(f"max:  {float(max_log_prob):.4f}")

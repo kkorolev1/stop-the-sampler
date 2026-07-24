@@ -26,7 +26,7 @@ def log_prob_kernel(x, mean, scale):
 
 def clip_log_reward(log_reward, clip_value=-1e5):
     return jnp.where(
-        log_reward > clip_value,
+        log_reward >= clip_value,
         log_reward,
         clip_value - jnp.log(clip_value - log_reward),
     )
@@ -85,7 +85,8 @@ def per_sample_rnd_train(
         fwd_clf_logits, fwd_mean, fwd_scale, log_f = model_forward(
             s, l, log_reward, langevin
         )
-        s_next, key_gen = sample_kernel(key_gen, fwd_mean, fwd_scale)
+        proposal, key_gen = sample_kernel(key_gen, fwd_mean, fwd_scale)
+        s_next = jnp.where(l == l_next, proposal, s)
         s_next = jax.lax.stop_gradient(s_next)
         fwd_log_prob = jnp.where(
             l == l_next,
@@ -117,7 +118,8 @@ def per_sample_rnd_train(
         # )
         s_next = jax.lax.stop_gradient(s_next)
         bwd_clf_logits, bwd_mean, bwd_scale = model_backward(s_next, l_next)
-        s, key_gen = sample_kernel(key_gen, bwd_mean, bwd_scale)
+        proposal, key_gen = sample_kernel(key_gen, bwd_mean, bwd_scale)
+        s = jnp.where(l == l_next, proposal, s_next)
         s = jax.lax.stop_gradient(s)
         bwd_log_prob = jnp.where(
             l == l_next,
@@ -359,7 +361,7 @@ def loss_fn_prefix_tb(
     else:
         tb_losses = jnp.square(discrepancy)
 
-    tb_losses = jnp.exp(jnp.log(tb_losses) + log_weights)
+    tb_losses = tb_losses * jnp.exp(log_weights)
     reg_terms = jnp.exp(
         jnp.log(reg_coef)
         + (-fwd_clf_log_probs_levels if only_clf_reg else log_fs_levels)

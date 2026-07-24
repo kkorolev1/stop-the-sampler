@@ -277,7 +277,7 @@ def loss_fn_prefix_tb(
     else:
         tb_losses = jnp.square(discrepancy)
 
-    tb_losses = jnp.exp(jnp.log(tb_losses) + log_weights)
+    tb_losses = tb_losses * jnp.exp(log_weights)
     reg_terms = jnp.exp(
         jnp.log(reg_coef)
         + (-fwd_clf_log_probs if only_clf_reg else log_fs[:, 1:])
