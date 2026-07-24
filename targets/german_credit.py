@@ -22,6 +22,11 @@ class GermanCredit(Target):
         self.labels = jnp.array(jnp.expand_dims(self.labels.astype(jnp.float32), 1))
         self.const_term = jnp.array(0.5 * jnp.log(2.0 * jnp.pi), dtype=jnp.float32)
         self._plot_bound = 3 * self._prior_std_const
+        samples = np.load(project_path("targets/data/german_credit10k.npy")).astype(
+            np.float32
+        )
+        self.normalization_shift = 0.0
+        self.normalization_shift = self.log_prob(samples.mean(axis=0))
 
     def log_prob(self, x: chex.Array) -> chex.Array:
         def _log_prob(x: chex.Array):
@@ -34,13 +39,7 @@ class GermanCredit(Target):
                 ),
                 axis=0,
             )
-            log_prior = jnp.sum(
-                -jnp.log(self._prior_std_const)
-                - self.const_term
-                - 0.5 * jnp.square((x - self.prior_mean_const) / self._prior_std_const),
-                axis=1,
-            )
-            log_posterior = log_likelihood  # + log_prior
+            log_posterior = log_likelihood - self.normalization_shift
             return log_posterior
 
         batched = x.ndim == 2
@@ -78,11 +77,11 @@ if __name__ == "__main__":
 
     num_samples = 100_000
     dim = 25
-    bounds = 20
-    samples = jax.random.uniform(key, (num_samples, dim), minval=-bounds, maxval=bounds)
-
-    # Calculate log probabilities
-    log_probs = jax.vmap(germanCredit.log_prob)(samples)
+    samples = np.load(project_path("targets/data/german_credit10k.npy")).astype(
+        np.float32
+    )
+    print(samples.min(), samples.mean(), samples.std(), samples.max())
+    log_probs = germanCredit.log_prob(samples)
 
     # Compute statistics: min, mean, max
     min_log_prob = jnp.min(log_probs)
@@ -94,3 +93,4 @@ if __name__ == "__main__":
     print(f"mean: {float(mean_log_prob):.4f}")
     print(f"std: {float(std_log_prob):.4f}")
     print(f"max:  {float(max_log_prob):.4f}")
+    print(germanCredit.normalization_shift)
