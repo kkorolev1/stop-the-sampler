@@ -55,17 +55,12 @@ def main(cfg: DictConfig) -> None:
         else:
             with jax.disable_jit():
                 train_fn(cfg, target, exp)
-        # if cfg.use_wandb:
-        #     wandb.run.summary["error"] = None
-        #     wandb.finish()
         if cfg.use_cometml:
             exp.log_other("error", None)
             exp.end()
 
     except Exception as e:
-        # if cfg.use_wandb:
-        #     wandb.run.summary["error"] = str(e)
-        #     wandb.finish(exit_code=1)
+        print(e)
         if cfg.use_cometml:
             exp.log_other("error", str(e))
             exp.end()

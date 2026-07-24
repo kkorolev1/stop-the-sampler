@@ -1,0 +1,119 @@
+name: ionosphere
+dim: 35
+has_entropy: False
+
+fn:
+  _target_: targets.ionosphere.Ionosphere
+  log_Z:
+  can_sample: False
+  sample_bounds: None
+
+# Experiment-specific algorithm parameters
+# !!! Default Parameters; Currently not tuned for this experiment !!!
+# ----------------------------------------
+
+mfvi: # Gaussian Mean Field Variational Inference
+  init_std: 1.
+  step_size: 1e-3
+
+gmmvi: # Gaussian Mixture Model Variational Inference
+  init_std: 1.
+
+nfvi: # Normalizing Flow Variational Inference
+  init_std: 1.
+  step_size: 1e-3
+
+hmc:  # Hamilton Monte Carlo
+  hmc_step_size: [0.1, 0.1]
+
+smc: # Sequential Monte Carlo Sampler
+  init_std: 1.
+
+flow_transport: # Flow Transport Methods (AFT/CRAFT)
+  init_std: 1.
+  step_size: 1e-3
+
+fab: # Flow Annealed Importance Sampling Bootstrap
+  init_std: 1.
+  step_size: 5e-4
+
+ud_langevin:  # Underdamped Langevin Methods (UHA/LDVI)
+  max_diffusion: 1.
+  init_std: 1.
+  step_size: 5e-4
+
+od_langevin:  # Overdamped Langevin Methods (ULA/MCD)
+  max_diffusion: 1.
+  init_std: 1.
+  step_size: 5e-4
+
+cmcd:  # Controlled Monte Carlo Diffusions
+  max_diffusion: 1.
+  init_std: 1.
+  step_size: 5e-4
+
+pis: # Path Integral Sampler
+  max_diffusion: 1.
+  step_size: 5e-4
+
+dis: # Time-reversed Diffusion Sampler
+  init_std: 1.
+  step_size: 5e-4
+
+dds: # Denoising Diffusion Sampler
+  init_std: 1.
+  step_size: 5e-4
+
+gfn_tb: # Generative Flow Networks
+  max_diffusion: 1.
+  step_size: 5e-4
+
+gbs:  # General Bridge Sampler
+  max_diffusion: 1.
+  init_std: 1.
+  step_size: 5e-4
+
+gfn_non_acyclic:
+  init_std: 1.0
+  weight_decay: 0.0
+  step_size: 1e-3
+  bwd_step_size: 1e-3
+  logZ_step_size: 1e-1
+  init_logZ: 0.
+  gamma: 0.1
+  reg_coef: 1.0
+  num_steps: 100
+  eval_max_steps: 500
+  loss_type: tb
+  logr_clip: -1e5
+  huber_delta: null
+  grad_clip: 1.0
+
+gfn_non_acyclic_ml:
+  init_std: 1.0
+  weight_decay: 0.0
+  step_size: 1e-3
+  bwd_step_size: 1e-3
+  logZ_step_size: 1e-1
+  init_logZ: 0.
+  gamma: 0.1
+  reg_coef: 1.0
+  num_steps: 100
+  eval_max_steps: 500
+  logr_clip: -1e5
+  huber_delta: null
+  grad_clip: 1.0
+  num_levels: 2
+
+all: # Parameters that are shared between all algorithms
+  batch_size: 2000
+  iters: 40000
+  milestones: [20000, 30000]
+  num_steps: 128
+  use_lp: True
+  num_hid: 128
+  fwd_log_var_range: 4
+  bwd_log_var_range: 4
+  outer_clip: 1e1
+  inner_clip: 1e2
+  mean_clip: 100.0

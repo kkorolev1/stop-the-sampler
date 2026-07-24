@@ -47,17 +47,20 @@ def load_model_sonar():
 
 
 class Sonar(Target):
-    def __init__(self, dim=61, log_Z=None, can_sample=False, sample_bounds=None) -> None:
+    def __init__(
+        self, dim=61, log_Z=None, can_sample=False, sample_bounds=None
+    ) -> None:
         super().__init__(dim=dim, log_Z=log_Z, can_sample=can_sample)
         self.data_ndim = dim
 
         rng_key = jax.random.PRNGKey(1)
         model, model_args = load_model_sonar()
-        model_param_info, potential_fn, constrain_fn, _ = numpyro.infer.util.initialize_model(
-            rng_key, model, model_args=model_args
+        model_param_info, potential_fn, constrain_fn, _ = (
+            numpyro.infer.util.initialize_model(rng_key, model, model_args=model_args)
         )
         params_flat, unflattener = ravel_pytree(model_param_info[0])
         self.log_prob_model = lambda z: -1.0 * potential_fn(unflattener(z))
+        self._plot_bound = 10.0
 
     def get_dim(self):
         return self.dim
@@ -76,7 +79,9 @@ class Sonar(Target):
 
         return log_probs
 
-    def visualise(self, samples: chex.Array = None, axes=None, show=False, prefix="") -> dict:
+    def visualise(
+        self, samples: chex.Array = None, axes=None, show=False, prefix=""
+    ) -> dict:
         return {}
 
     def sample(self, seed: chex.PRNGKey, sample_shape: chex.Shape) -> chex.Array:

@@ -22,6 +22,7 @@ class BreastCancer(Target):
         self.prior_mean_const = jnp.array(0.0, dtype=jnp.float32)
         self.labels = jnp.array(jnp.expand_dims(self.labels.astype(jnp.float32), 1))
         self.const_term = jnp.array(0.5 * jnp.log(2.0 * jnp.pi), dtype=jnp.float32)
+        self._plot_bound = 3 * self._prior_std_const
 
     def log_prob(self, x: chex.Array) -> chex.Array:
         def _log_prob(x: chex.Array):
@@ -54,7 +55,9 @@ class BreastCancer(Target):
 
         return log_probs
 
-    def visualise(self, samples: chex.Array = None, axes=None, show=False, prefix="") -> dict:
+    def visualise(
+        self, samples: chex.Array = None, axes=None, show=False, prefix=""
+    ) -> dict:
         return {}
 
     def sample(self, seed: chex.PRNGKey, sample_shape: chex.Shape) -> chex.Array:
@@ -65,7 +68,7 @@ class BreastCancer(Target):
             seed, ground_truth_samples.shape[0], shape=sample_shape, replace=False
         )
         # Use the generated indices to select the subset
-        return ground_truth_samples[indices]
+        return jnp.array(ground_truth_samples[indices])
 
 
 if __name__ == "__main__":

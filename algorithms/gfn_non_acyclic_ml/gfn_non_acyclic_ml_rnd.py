@@ -441,7 +441,8 @@ def per_sample_rnd_eval(
         l_next = jnp.where(jump_to_next_level, jnp.minimum(l + 1, num_levels), l)
         reached_last_level_terminal = jump_to_next_level & (l == num_levels)
         is_terminal_next = is_terminal | reached_last_level_terminal
-        s_next, key_gen = sample_kernel(key_gen, fwd_mean, fwd_scale)
+        proposal, key_gen = sample_kernel(key_gen, fwd_mean, fwd_scale)
+        s_next = jnp.where(jump_to_next_level, s, proposal)
         s_next = jax.lax.stop_gradient(s_next)
         fwd_log_prob = log_prob_kernel(s_next, fwd_mean, fwd_scale) + nn.log_sigmoid(
             -fwd_clf_logits
@@ -453,10 +454,19 @@ def per_sample_rnd_eval(
             is_terminal, jnp.zeros_like(fwd_clf_logits), fwd_log_prob
         )
         bwd_clf_logits, bwd_mean, bwd_scale = model_backward(s_next, l_next)
-        bwd_log_prob = log_prob_kernel(s, bwd_mean, bwd_scale) + jax.nn.log_sigmoid(
+        bwd_log_prob = log_prob_kernel(s, bwd_mean, bwd_scale) + nn.log_sigmoid(
             -bwd_clf_logits
         )
-        bwd_log_prob = jnp.where(is_terminal_next, log_reward, bwd_log_prob)
+        bwd_log_prob = jnp.where(
+            jump_to_next_level,
+            nn.log_sigmoid(bwd_clf_logits),
+            bwd_log_prob,
+        )
+        bwd_log_prob = jnp.where(
+            reached_last_level_terminal,
+            log_reward,
+            bwd_log_prob,
+        )
         bwd_log_prob = jnp.where(
             is_terminal, jnp.zeros_like(bwd_log_prob), bwd_log_prob
         )
@@ -496,16 +506,22 @@ def per_sample_rnd_eval(
         l = jnp.where(jump_to_prev_level, jnp.maximum(l_next - 1, 1), l_next)
         reached_first_level_terminal = jump_to_prev_level & (l_next == 1)
         is_terminal = is_terminal_next | reached_first_level_terminal
-        s, key_gen = sample_kernel(key_gen, bwd_mean, bwd_scale)
+        proposal, key_gen = sample_kernel(key_gen, bwd_mean, bwd_scale)
+        s = jnp.where(jump_to_prev_level, s_next, proposal)
         s = jax.lax.stop_gradient(s)
         bwd_log_prob = log_prob_kernel(s, bwd_mean, bwd_scale) + nn.log_sigmoid(
             -bwd_clf_logits
         )
         bwd_log_prob = jnp.where(
-            jump_to_prev_level, nn.log_sigmoid(bwd_clf_logits), bwd_log_prob
+            jump_to_prev_level,
+            nn.log_sigmoid(bwd_clf_logits),
+            bwd_log_prob,
         )
+
         bwd_log_prob = jnp.where(
-            is_terminal_next, jnp.zeros_like(bwd_clf_logits), bwd_log_prob
+            is_terminal_next,
+            jnp.zeros_like(bwd_log_prob),
+            bwd_log_prob,
         )
 
         log_reward, langevin = compute_log_reward_and_langevin(s, l)
@@ -514,14 +530,26 @@ def per_sample_rnd_eval(
             s, l, log_reward, langevin
         )
 
-        fwd_log_prob = log_prob_kernel(
-            s_next, fwd_mean, fwd_scale
-        ) + jax.nn.log_sigmoid(-fwd_clf_logits)
-        fwd_log_prob = jnp.where(
-            is_terminal, initial_dist.log_prob(s_next), fwd_log_prob
+        fwd_log_prob = log_prob_kernel(s_next, fwd_mean, fwd_scale) + nn.log_sigmoid(
+            -fwd_clf_logits
         )
+
         fwd_log_prob = jnp.where(
-            is_terminal_next, jnp.zeros_like(fwd_log_prob), fwd_log_prob
+            jump_to_prev_level,
+            nn.log_sigmoid(fwd_clf_logits),
+            fwd_log_prob,
+        )
+
+        fwd_log_prob = jnp.where(
+            reached_first_level_terminal,
+            initial_dist.log_prob(s_next),
+            fwd_log_prob,
+        )
+
+        fwd_log_prob = jnp.where(
+            is_terminal_next,
+            jnp.zeros_like(fwd_log_prob),
+            fwd_log_prob,
         )
 
         s = jnp.where(is_terminal, jnp.zeros_like(s), s)
