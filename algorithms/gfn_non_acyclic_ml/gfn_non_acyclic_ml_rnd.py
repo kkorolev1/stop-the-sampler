@@ -346,10 +346,7 @@ def loss_fn_prefix_tb(
         )
     else:
         log_weights = jnp.log(
-            jnp.ones(
-                (fwd_clf_logits_levels.shape[0], fwd_clf_logits_levels.shape[1], 1)
-            )
-            / fwd_clf_logits_levels.shape[-1]
+            jnp.ones_like(fwd_clf_logits_levels) / fwd_clf_logits_levels.shape[-1]
         )
 
     if huber_delta is not None:
