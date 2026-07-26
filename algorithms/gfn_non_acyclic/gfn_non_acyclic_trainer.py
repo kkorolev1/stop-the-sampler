@@ -69,7 +69,10 @@ def gfn_non_acyclic_trainer(cfg, target, exp=None):
     num_steps = alg_cfg.num_steps
     reg_coef = alg_cfg.reg_coef
 
-    target_xs = target.sample(jax.random.PRNGKey(0), (cfg.eval_samples,))
+    if target.can_sample:
+        target_xs = target.sample(jax.random.PRNGKey(0), (cfg.eval_samples,))
+    else:
+        target_xs = jnp.zeros((cfg.eval_samples, target.dim), dtype=float)
 
     target_sds = []
     for i in range(5):
