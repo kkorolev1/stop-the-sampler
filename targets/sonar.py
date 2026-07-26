@@ -110,7 +110,7 @@ class Sonar(Target):
             fig.colorbar(contour, ax=ax)
 
             if samples is not None:
-                ax.plot(samples[:, x_dim], samples[:, y_dim], "o", alpha=0.5)
+                ax.plot(samples[:, x_dim], samples[:, y_dim], "x", c="r", alpha=0.5)
             ax.set_xlabel(f"x{x_dim + 1}")
             ax.set_ylabel(f"x{y_dim + 1}")
 
