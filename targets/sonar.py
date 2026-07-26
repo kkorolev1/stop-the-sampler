@@ -9,6 +9,7 @@ import numpy as np
 import numpyro
 import numpyro.distributions as pydist
 from jax._src.flatten_util import ravel_pytree
+import wandb
 
 from targets.base_target import Target
 from utils.path_utils import project_path
@@ -82,7 +83,50 @@ class Sonar(Target):
     def visualise(
         self, samples: chex.Array = None, axes=None, show=False, prefix=""
     ) -> dict:
-        return {}
+        projection_pairs = ((0, 1), (0, 3), (2, 1), (2, 3))
+        plotting_bounds = (-float(self._plot_bound), float(self._plot_bound))
+        grid_width_n_points = 100
+
+        fig, axs = plt.subplots(2, 2, figsize=(8, 8), sharex="row", sharey="row")
+        if samples is not None:
+            samples = jnp.clip(samples, min=plotting_bounds[0], max=plotting_bounds[1])
+
+        x_grid, y_grid = jnp.meshgrid(
+            jnp.linspace(plotting_bounds[0], plotting_bounds[1], grid_width_n_points),
+            jnp.linspace(plotting_bounds[0], plotting_bounds[1], grid_width_n_points),
+        )
+        x_points = jnp.column_stack([x_grid.ravel(), y_grid.ravel()])
+
+        for ax, (x_dim, y_dim) in zip(axs.ravel(), projection_pairs):
+            x = jnp.zeros((x_points.shape[0], self.dim))
+            x = x.at[:, x_dim].set(x_points[:, 0])
+            x = x.at[:, y_dim].set(x_points[:, 1])
+            log_probs = self.log_prob(x)
+            log_probs = jnp.clip(log_probs, min=-1000, max=None).reshape(
+                (grid_width_n_points, grid_width_n_points)
+            )
+
+            contour = ax.contourf(x_grid, y_grid, log_probs, levels=20)
+            fig.colorbar(contour, ax=ax)
+
+            if samples is not None:
+                ax.plot(samples[:, x_dim], samples[:, y_dim], "o", alpha=0.5)
+            ax.set_xlabel(f"x{x_dim + 1}")
+            ax.set_ylabel(f"x{y_dim + 1}")
+
+        plt.tight_layout()
+        wb = {f"figures/{prefix + '_' if prefix else ''}vis": [wandb.Image(fig)]}
+        if show:
+            plt.show()
+        else:
+            plt.close()
+
+        return wb
 
     def sample(self, seed: chex.PRNGKey, sample_shape: chex.Shape) -> chex.Array:
         return None
+
+
+if __name__ == "__main__":
+    sonar = Sonar()
+    sonar.visualise(None, show=True)
