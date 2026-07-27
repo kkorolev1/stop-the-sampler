@@ -24,11 +24,12 @@ def log_prob_kernel(x, mean, scale):
 
 
 def clip_log_reward(log_reward, clip_value=-1e5):
-    return jnp.where(
-        log_reward > clip_value,
-        log_reward,
-        clip_value - jnp.log(clip_value - log_reward),
-    )
+    return log_reward
+    # return jnp.where(
+    #     log_reward > clip_value,
+    #     log_reward,
+    #     clip_value - jnp.log(clip_value - log_reward),
+    # )
 
 
 def per_sample_rnd_train(

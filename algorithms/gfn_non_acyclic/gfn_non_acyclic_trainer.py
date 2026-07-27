@@ -95,6 +95,18 @@ def gfn_non_acyclic_trainer(cfg, target, exp=None):
     # )
     aux_tuple = (alg_cfg.logr_clip,)
 
+    original_log_reward = target.log_prob
+
+    def log_reward_fn(x):
+        log_reward = original_log_reward(x)
+        return jnp.where(
+            log_reward > alg_cfg.logr_clip,
+            log_reward,
+            alg_cfg.logr_clip - jnp.log(alg_cfg.logr_clip - log_reward),
+        )
+
+    target.log_prob = log_reward_fn
+
     # Initialize the buffer
     use_buffer = buffer_cfg.use
     buffer = buffer_state = None
