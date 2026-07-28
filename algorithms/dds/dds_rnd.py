@@ -2,6 +2,18 @@ import jax
 import jax.numpy as jnp
 
 from algorithms.common.types import Array
+import numpyro.distributions as npdist
+
+
+def sample_kernel(key_gen, mean, scale):
+    key, key_gen = jax.random.split(key_gen)
+    eps = jnp.clip(jax.random.normal(key, shape=(mean.shape[0],)), -4.0, 4.0)
+    return mean + scale * eps, key_gen
+
+
+def log_prob_kernel(x, mean, scale):
+    dist = npdist.Independent(npdist.Normal(loc=mean, scale=scale), 1)
+    return dist.log_prob(x)
 
 
 def cos_sq_fn_step_scheme(n_steps, s=0.008, noise_scale=6.0, dtype=jnp.float32):
@@ -45,19 +57,23 @@ def per_sample_rnd(
         else:
             langevin = jnp.zeros(x.shape[0])
         model_output, _ = model_state.apply_fn(params, x, step * jnp.ones(1), langevin)
-        key, key_gen = jax.random.split(key_gen)
-        noise = jnp.clip(jax.random.normal(key, shape=x.shape), -4, 4)
 
         # Exponential integration of the SDE
-        x_new = alpha_t * x + beta_t**2 * model_output + beta_t * noise * init_std
+        fwd_mean = alpha_t * x + beta_t**2 * model_output
+        fwd_scale = beta_t * init_std
+        x_new, key_gen = sample_kernel(key_gen, fwd_mean, fwd_scale)
 
         if stop_grad:
             x_new = jax.lax.stop_gradient(x_new)
 
         # Compute (running) Radon-Nikodym derivative components
         running_cost = (
-            0.5 * beta_t**2 * jnp.square(jnp.linalg.norm(model_output)) * (1 / init_std**2)
+            0.5
+            * beta_t**2
+            * jnp.square(jnp.linalg.norm(model_output))
+            * (1 / init_std**2)
         )
+        noise = (x_new - fwd_mean) / fwd_scale
         stochastic_cost = (model_output * noise).sum() * beta_t / init_std
 
         next_state = (x_new, key_gen)
@@ -73,11 +89,11 @@ def per_sample_rnd(
         if stop_grad:
             x_new = jax.lax.stop_gradient(x_new)
 
-        key, key_gen = jax.random.split(key_gen)
-        noise = jnp.clip(jax.random.normal(key, shape=x_new.shape), -4, 4)
-
         # Exponential integration of the SDE
-        x = alpha_t * x_new + beta_t * noise * init_std
+        bwd_mean = alpha_t * x_new
+        bwd_scale = beta_t * init_std
+
+        x, key_gen = sample_kernel(key_gen, bwd_mean, bwd_scale)
         if stop_grad:
             x = jax.lax.stop_gradient(x)
 
@@ -89,6 +105,7 @@ def per_sample_rnd(
         model_output, _ = model_state.apply_fn(params, x, step * jnp.ones(1), langevin)
 
         # Compute (running) Radon-Nikodym derivative components
+        # fmt: off
         running_cost = (
             0.5 * beta_t**2 * jnp.square(jnp.linalg.norm(model_output)) * (1 / init_std**2)
         )
