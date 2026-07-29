@@ -15,12 +15,13 @@ from algorithms.common.types import Array, RandomKey, ModelParams
 def sample_kernel(key_gen, mean, scale):
     key, key_gen = jax.random.split(key_gen)
     eps = jnp.clip(jax.random.normal(key, shape=(mean.shape[0],)), -4.0, 4.0)
-    return mean + scale * eps, key_gen
+    return mean + jnp.dot(scale, eps), key_gen
 
 
 def log_prob_kernel(x, mean, scale):
-    dist = npdist.Independent(npdist.Normal(loc=mean, scale=scale), 1)
-    return dist.log_prob(x)
+    if scale.ndim <= 1:
+        return npdist.Independent(npdist.Normal(mean, scale), 1).log_prob(x)
+    return npdist.MultivariateNormal(loc=mean, scale_tril=scale).log_prob(x)
 
 
 def clip_log_reward(log_reward, clip_value=-1e5):
@@ -46,7 +47,9 @@ def per_sample_rnd_train(
     (logr_clip,) = aux_tuple
 
     def model_forward(s, log_reward, langevin):
-        return model_state.apply_fn(params, s, log_reward, langevin, predict_fwd=True)
+        return model_state.apply_fn(
+            params, s, log_reward, langevin, predict_fwd=True, target=target
+        )
 
     def model_backward(s_next):
         return model_state.apply_fn(params, s_next, predict_fwd=False)
@@ -78,7 +81,13 @@ def per_sample_rnd_train(
 
         # Return next state and per-step output
         next_state = (s_next, key_gen)
-        per_step_output = (s, fwd_log_prob, bwd_log_prob, fwd_clf_logits, log_f)
+        per_step_output = (
+            s,
+            fwd_log_prob,
+            bwd_log_prob,
+            fwd_clf_logits,
+            log_f,
+        )
         return next_state, per_step_output
 
     def simulate_target_to_prior(state, per_step_input):
@@ -101,7 +110,13 @@ def per_sample_rnd_train(
         ) + jax.nn.log_sigmoid(-fwd_clf_logits)
 
         next_state = (s, key_gen)
-        per_step_output = (s, fwd_log_prob, bwd_log_prob, fwd_clf_logits, log_f)
+        per_step_output = (
+            s,
+            fwd_log_prob,
+            bwd_log_prob,
+            fwd_clf_logits,
+            log_f,
+        )
         return next_state, per_step_output
 
     if prior_to_target:
@@ -409,6 +424,7 @@ def per_sample_rnd_eval(
             langevin,
             predict_fwd=True,
             force_stop=force_stop,
+            target=target,
         )
 
     def model_backward(s_next, force_stop=False):
@@ -668,6 +684,14 @@ def get_step_fn(aux_tuple, target, name):
         fwd_scale = jnp.sqrt(2 * gamma)
         return sample_kernel(key_gen, fwd_mean, fwd_scale)
 
+    def ula_preconditioned_step(s, key_gen):
+        langevin = jax.lax.stop_gradient(jax.grad(target.log_prob)(s))
+        fwd_mean = s + (target.preconditioner @ langevin) * gamma
+        key, key_gen = jax.random.split(key_gen)
+        eps = jnp.clip(jax.random.normal(key, shape=(fwd_mean.shape[0],)), -4.0, 4.0)
+        s_new = fwd_mean + jnp.sqrt(2 * gamma) * target.preconditioner_cholesky @ eps
+        return s_new, key_gen
+
     def mala_step(s, key_gen):
         log_reward, langevin = compute_log_reward_and_langevin(s)
         fwd_mean = s + langevin * gamma
@@ -688,7 +712,11 @@ def get_step_fn(aux_tuple, target, name):
         new_state = jnp.where(accept_mask, s_next, s)
         return new_state, key_gen
 
-    return {"ula": ula_step, "mala": mala_step}[name]
+    return {
+        "ula": ula_step,
+        "mala": mala_step,
+        "ula_preconditioned": ula_preconditioned_step,
+    }[name]
 
 
 def per_sample_rnd_mcmc(

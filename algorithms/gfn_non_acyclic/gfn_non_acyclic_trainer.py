@@ -9,6 +9,7 @@ import distrax
 import jax
 import jax.numpy as jnp
 from omegaconf import OmegaConf
+from time import time
 
 import wandb
 
@@ -42,8 +43,8 @@ def get_checkpoint_dir(cfg):
 
 def get_checkpoint_path(cfg, iter):
     suffix = ""
-    learn_fwd_corrections = cfg.algorithm.model.get("learn_fwd_corrections")
-    if learn_fwd_corrections is not None and (not learn_fwd_corrections):
+    learn_fwd = cfg.algorithm.model.get("learn_fwd")
+    if learn_fwd is not None and (not learn_fwd):
         suffix = "_small"
     return os.path.join(get_checkpoint_dir(cfg), f"model_params_{iter}{suffix}.pkl")
 
@@ -53,7 +54,7 @@ def save_model_checkpoint(cfg, model_state, iter=None):
     payload = {
         "params": serialization.to_state_dict(model_state.params),
         "iter": None if iter is None else int(iter),
-        "config": OmegaConf.to_container(cfg, resolve=True),
+        # "config": OmegaConf.to_container(cfg, resolve=True),
     }
     with open(ckpt_path, "wb") as f:
         pickle.dump(payload, f)
@@ -82,9 +83,7 @@ def gfn_non_acyclic_trainer(cfg, target, exp=None):
     target_sds = jnp.array(target_sds)
     print(f"target SD mean={jnp.mean(target_sds):.3f} std={jnp.std(target_sds):.3f}")
 
-    alg_cfg.model.use_lp = alg_cfg.model.use_lp or (
-        not alg_cfg.model.learn_fwd_corrections
-    )
+    alg_cfg.model.use_lp = alg_cfg.model.use_lp or (not alg_cfg.model.learn_fwd)
 
     initial_dist = distrax.MultivariateNormalDiag(
         jnp.zeros(dim), jnp.ones(dim) * alg_cfg.init_std
@@ -256,8 +255,10 @@ def gfn_non_acyclic_trainer(cfg, target, exp=None):
 
     grads = None
     off_policy_iters = 0
+    timer = 0.0
     ### Training phase
     for it in range(alg_cfg.iters):
+        iter_time = time()
         # On-policy training with forward samples
         is_on_policy_iter = (
             not use_buffer or it % (buffer_cfg.bwd_to_fwd_ratio + 1) == 0
@@ -330,7 +331,7 @@ def gfn_non_acyclic_trainer(cfg, target, exp=None):
                     losses,
                 )
             off_policy_iters += 1
-
+        timer += time() - iter_time
         if cfg.use_cometml:
             params_norm = tree_l2_norm(
                 model_state.params.get("params", model_state.params)
@@ -356,6 +357,7 @@ def gfn_non_acyclic_trainer(cfg, target, exp=None):
             key, key_gen = jax.random.split(key_gen)
             logger["stats/step"].append(it)
             logger["stats/nfe"].append((it + 1) * batch_size)  # FIXME
+            logger["stats/wallclock"].append(timer)
 
             logger.update(eval_fn(model_state, key))
 

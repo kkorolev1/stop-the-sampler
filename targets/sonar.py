@@ -13,6 +13,7 @@ import wandb
 
 from targets.base_target import Target
 from utils.path_utils import project_path
+from utils.preconditioner import compute_laplace_preconditioner
 
 
 def pad_with_const(X):
@@ -44,7 +45,7 @@ def load_model_sonar():
     dim = X.shape[1]
     n_data = X.shape[0]
     model_args = (Y,)
-    return model, model_args
+    return model, model_args, X, Y
 
 
 class Sonar(Target):
@@ -54,14 +55,22 @@ class Sonar(Target):
         super().__init__(dim=dim, log_Z=log_Z, can_sample=can_sample)
         self.data_ndim = dim
 
+        model, model_args, X, Y = load_model_sonar()
+        self.X = X
+        self.Y = Y
         rng_key = jax.random.PRNGKey(1)
-        model, model_args = load_model_sonar()
         model_param_info, potential_fn, constrain_fn, _ = (
             numpyro.infer.util.initialize_model(rng_key, model, model_args=model_args)
         )
         params_flat, unflattener = ravel_pytree(model_param_info[0])
         self.log_prob_model = lambda z: -1.0 * potential_fn(unflattener(z))
         self._plot_bound = 10.0
+
+        self.preconditioner, self.preconditioner_cholesky = (
+            compute_laplace_preconditioner(
+                self.X, self.Y, lamda=1e-4, max_iters=100, tol=1e-6
+            )
+        )
 
     def get_dim(self):
         return self.dim
@@ -128,5 +137,45 @@ class Sonar(Target):
 
 
 if __name__ == "__main__":
-    sonar = Sonar()
-    sonar.visualise(None, show=True)
+    target = Sonar()
+    # target.visualise(None, show=True)
+
+    from utils.preconditioner import (
+        logistic_log_posterior_grad,
+        negative_log_posterior_hessian,
+    )
+
+    X, Y = target.X, target.Y
+    P = target.preconditioner
+    L = target.preconditioner_cholesky
+    lamda = 1e-4
+    dim = X.shape[1]
+    I = jnp.eye(dim, dtype=X.dtype)
+
+    def maxabs(x):
+        return float(jnp.max(jnp.abs(x)))
+
+    # Recompute MAP, since compute_laplace_preconditioner currently does not return it.
+    w = jnp.zeros(dim, dtype=X.dtype)
+    for _ in range(100):
+        g = logistic_log_posterior_grad(w, X, Y)
+        H = negative_log_posterior_hessian(w, X)
+        step = jnp.linalg.solve(H + lamda * I, g)
+        w = w + step
+        if float(jnp.linalg.norm(step) / (1.0 + jnp.linalg.norm(w))) < 1e-6:
+            break
+
+    manual_g = logistic_log_posterior_grad(w, X, Y)
+    autodiff_g = jax.grad(target.log_prob)(w)
+
+    manual_H = negative_log_posterior_hessian(w, X)
+    autodiff_H = jax.hessian(lambda z: -target.log_prob(z))(w)
+    Hreg = manual_H + lamda * I
+
+    print("grad norm at MAP:", float(jnp.linalg.norm(manual_g)))
+    print("grad formula error:", maxabs(manual_g - autodiff_g))
+    print("hessian formula error:", maxabs(manual_H - autodiff_H))
+    print("symmetry error:", maxabs(P - P.T))
+    print("min eig(P):", float(jnp.min(jnp.linalg.eigvalsh(P))))
+    print("inverse residual:", maxabs(Hreg @ P - I))
+    print("cholesky residual:", maxabs(L @ L.T - P))

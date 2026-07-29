@@ -17,7 +17,8 @@ class NonAcyclicNet(nn.Module):
     gamma: float = 1.0
     fwd_log_var_range: float = 4.0
     bwd_log_var_range: float = 4.0
-    learn_fwd_corrections: bool = True
+    learn_fwd: bool = True
+    use_preconditioner: bool = False
     shared_model: bool = False
 
     min_clf_logits: float = -100.0
@@ -25,9 +26,7 @@ class NonAcyclicNet(nn.Module):
 
     def setup(self):
         self.fwd_pred_dim = (
-            1 + 2 * self.dim + (self.dim if self.use_lp else 0)
-            if self.learn_fwd_corrections
-            else 1
+            1 + 2 * self.dim + (self.dim if self.use_lp else 0) if self.learn_fwd else 1
         )
         self.bwd_pred_dim = 1 + 2 * self.dim
         if self.shared_model:
@@ -81,13 +80,14 @@ class NonAcyclicNet(nn.Module):
         model_output,
         lgv_term,
         force_stop=False,
+        target=None,
     ):
         if lgv_term is None:
             lgv_term = jnp.zeros_like(s)
         lgv_term = jnp.clip(lgv_term, -self.inner_clip, self.inner_clip)
         if self.shared_model:
             model_output, _ = jnp.split(model_output, [self.fwd_pred_dim], axis=-1)
-        if self.learn_fwd_corrections:
+        if self.learn_fwd:
             if self.use_lp:
                 (
                     fwd_clf_logits,
@@ -118,8 +118,16 @@ class NonAcyclicNet(nn.Module):
             )
         else:
             fwd_clf_logits = model_output
-            fwd_mean = s + lgv_term * self.gamma
-            fwd_scale = jnp.sqrt(2 * self.gamma)
+            if (
+                self.use_preconditioner
+                and target is not None
+                and hasattr(target, "preconditioner")
+            ):
+                fwd_mean = s + (target.preconditioner @ lgv_term) * self.gamma
+                fwd_scale = jnp.sqrt(2 * self.gamma) * target.preconditioner_cholesky
+            else:
+                fwd_mean = s + lgv_term * self.gamma
+                fwd_scale = jnp.sqrt(2 * self.gamma)
 
         fwd_mean = jnp.clip(fwd_mean, -self.mean_clip, self.mean_clip)
         fwd_clf_logits = fwd_clf_logits.squeeze(-1)
@@ -145,6 +153,7 @@ class NonAcyclicNet(nn.Module):
         )
         # fmt: off
         bwd_drift = jnp.clip(-nn.softplus(bwd_mean_corr) * s, -self.outer_clip, self.outer_clip)
+        # bwd_drift = jnp.clip(bwd_mean_corr, -self.outer_clip, self.outer_clip)
         bwd_mean = s + bwd_drift * self.gamma
         bwd_scale = jnp.sqrt(
             jnp.exp(self.bwd_log_var_range * nn.tanh(bwd_scale_corr)) * self.gamma
@@ -165,6 +174,7 @@ class NonAcyclicNet(nn.Module):
         lgv_term=None,
         predict_fwd=True,
         force_stop=False,
+        target=None,
     ):
         if predict_fwd:
             model_output = (
@@ -177,6 +187,7 @@ class NonAcyclicNet(nn.Module):
                 model_output,
                 lgv_term,
                 force_stop,
+                target,
             )
             if log_reward is None:
                 log_flow = jnp.zeros_like(s[..., 0])

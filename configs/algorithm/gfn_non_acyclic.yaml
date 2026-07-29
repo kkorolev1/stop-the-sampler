@@ -36,6 +36,7 @@ model:
   outer_clip: ${target.all.outer_clip}
   inner_clip: ${target.all.inner_clip}
   mean_clip: ${target.all.mean_clip}
+  use_preconditioner: False
 
 buffer:
   use: True

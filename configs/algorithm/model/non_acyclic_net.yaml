@@ -9,8 +9,9 @@ weight_init: 1e-8
 bias_init: 0.1
 
 gamma: ${target.gfn_non_acyclic.gamma}
-learn_fwd_corrections: True
+learn_fwd: True
 shared_model: False
+use_preconditioner: False
 
 fwd_log_var_range: 4
 bwd_log_var_range: 4
