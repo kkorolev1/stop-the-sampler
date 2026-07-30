@@ -22,7 +22,7 @@ class NonAcyclicNet(nn.Module):
     shared_model: bool = False
 
     min_clf_logits: float = -100.0
-    mean_clip: float = 10.0
+    mean_clip: float = 1e4
 
     def setup(self):
         self.fwd_pred_dim = (

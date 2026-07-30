@@ -52,6 +52,7 @@ def gfn_non_acyclic_ml_trainer(cfg, target, exp=None):
         target_sds.append(compute_sd(samples1, samples2, None))
     target_sds = jnp.array(target_sds)
     print(f"target SD mean={jnp.mean(target_sds):.3f} std={jnp.std(target_sds):.3f}")
+    alg_cfg.model.use_lp = alg_cfg.model.use_lp or (not alg_cfg.model.learn_fwd)
 
     initial_dist = distrax.MultivariateNormalDiag(
         jnp.zeros(dim), jnp.ones(dim) * alg_cfg.init_std
@@ -205,7 +206,7 @@ def gfn_non_acyclic_ml_trainer(cfg, target, exp=None):
         # logZ_estimates = []
         for _ in range(buffer_cfg.prefill_steps):
             key, key_gen = jax.random.split(key_gen)
-            _, (samples, log_iws, log_rewards, losses, *_) = loss_fwd_nograd_fn(
+            _, (samples, log_iws, log_rewards, *loss_other_data) = loss_fwd_nograd_fn(
                 key,
                 model_state,
                 model_state.params,
@@ -215,7 +216,7 @@ def gfn_non_acyclic_ml_trainer(cfg, target, exp=None):
                 samples,
                 log_iws,
                 log_rewards,
-                losses,
+                loss_other_data[0],
             )
 
     def tree_l2_norm(tree):
@@ -235,8 +236,8 @@ def gfn_non_acyclic_ml_trainer(cfg, target, exp=None):
         if is_on_policy_iter:
             # Sample from model
             key, key_gen = jax.random.split(key_gen)
-            grads, (samples, log_iws, log_rewards, losses, *loss_weights) = (
-                loss_fwd_grad_fn(key, model_state, model_state.params)
+            grads, (samples, log_iws, log_rewards, *loss_other_data) = loss_fwd_grad_fn(
+                key, model_state, model_state.params
             )
             model_state = model_state.apply_gradients(grads=grads)
 
@@ -247,7 +248,7 @@ def gfn_non_acyclic_ml_trainer(cfg, target, exp=None):
                     samples,
                     log_iws,
                     log_rewards,
-                    losses,
+                    loss_other_data[0],
                 )
 
         # Off-policy training with buffer samples
@@ -277,7 +278,7 @@ def gfn_non_acyclic_ml_trainer(cfg, target, exp=None):
 
             # Get grads with the off-policy samples
             key, key_gen = jax.random.split(key_gen)
-            grads, (_, log_pbs_over_pfs, _, losses, *loss_weights) = loss_bwd_grad_fn(
+            grads, (_, log_pbs_over_pfs, _, *loss_other_data) = loss_bwd_grad_fn(
                 key,
                 model_state,
                 model_state.params,
@@ -291,9 +292,9 @@ def gfn_non_acyclic_ml_trainer(cfg, target, exp=None):
                 buffer_state = buffer.update_priority(
                     buffer_state,
                     indices,
-                    (log_pbs_over_pfs.sum(-1) + log_rewards),
+                    log_pbs_over_pfs,
                     log_rewards,
-                    losses,
+                    loss_other_data[0],
                 )
             off_policy_iters += 1
 
@@ -306,10 +307,15 @@ def gfn_non_acyclic_ml_trainer(cfg, target, exp=None):
                 if grads is not None
                 else jnp.nan
             )
+            total_losses, losses, reg_terms, *loss_weights = loss_other_data
             exp.log_metrics(
                 {
-                    "loss": jnp.mean(losses),
-                    ("loss_fwd" if is_on_policy_iter else "loss_bwd"): jnp.mean(losses),
+                    "loss": jnp.mean(total_losses),
+                    ("loss_fwd" if is_on_policy_iter else "loss_bwd"): jnp.mean(
+                        total_losses
+                    ),
+                    f"loss_tb": jnp.mean(losses),
+                    f"loss_reg": jnp.mean(reg_terms),
                     "logZ_learned": model_state.params["params"]["logZ"].sum(),
                     "params_l2_norm": params_norm,
                     "grads_l2_norm": grads_norm,

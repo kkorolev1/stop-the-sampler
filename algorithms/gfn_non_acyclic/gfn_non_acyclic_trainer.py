@@ -326,7 +326,7 @@ def gfn_non_acyclic_trainer(cfg, target, exp=None):
                 buffer_state = buffer.update_priority(
                     buffer_state,
                     indices,
-                    (log_pbs_over_pfs.sum(-1) + log_rewards),
+                    log_pbs_over_pfs,
                     log_rewards,
                     loss_other_data[0],
                 )

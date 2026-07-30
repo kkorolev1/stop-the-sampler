@@ -16,12 +16,17 @@ from algorithms.gfn_non_acyclic.sampling_utils import binary_search_smoothing
 def sample_kernel(key_gen, mean, scale):
     key, key_gen = jax.random.split(key_gen)
     eps = jnp.clip(jax.random.normal(key, shape=(mean.shape[0],)), -4.0, 4.0)
-    return mean + scale * eps, key_gen
+    if scale.ndim <= 1:
+        s = mean + scale * eps
+    else:
+        s = mean + scale @ eps
+    return s, key_gen
 
 
 def log_prob_kernel(x, mean, scale):
-    dist = npdist.Independent(npdist.Normal(loc=mean, scale=scale), 1)
-    return dist.log_prob(x)
+    if scale.ndim <= 1:
+        return npdist.Independent(npdist.Normal(mean, scale), 1).log_prob(x)
+    return npdist.MultivariateNormal(loc=mean, scale_tril=scale).log_prob(x)
 
 
 def clip_log_reward(log_reward, clip_value=-1e5):
@@ -50,7 +55,13 @@ def per_sample_rnd_train(
 
     def model_forward(s, l, log_reward, langevin):
         return model_state.apply_fn(
-            params, s, l, log_reward, langevin, predict_fwd=True
+            params,
+            s,
+            l,
+            log_reward,
+            langevin,
+            predict_fwd=True,
+            target=target,
         )
 
     def model_backward(s_next, l_next):
@@ -365,14 +376,18 @@ def loss_fn_prefix_tb(
         + (-fwd_clf_log_probs_levels if only_clf_reg else log_fs_levels)
         + log_weights
     )
-    losses = tb_losses.sum(-1).sum(-1) + reg_terms.sum(-1).sum(-1)
+    tb_losses = tb_losses.sum(-1).sum(-1)
+    reg_terms = reg_terms.sum(-1).sum(-1)
+    losses = tb_losses + reg_terms
 
     return jnp.mean(losses), (
         trajectories[:, -1],
         jax.lax.stop_gradient(-log_pfs_over_pbs).sum(-1),
         log_rewards,
+        jax.lax.stop_gradient(losses),
         jax.lax.stop_gradient(tb_losses),
-        jnp.exp(log_weights).reshape(batch_size, num_steps),
+        jax.lax.stop_gradient(reg_terms),
+        jax.lax.stop_gradient(jnp.exp(log_weights).reshape(batch_size, num_steps)),
     )
 
 
@@ -400,6 +415,7 @@ def per_sample_rnd_eval(
             langevin,
             predict_fwd=True,
             force_stop=force_stop,
+            target=target,
         )
 
     def model_backward(s_next, l_next, force_stop=False):
