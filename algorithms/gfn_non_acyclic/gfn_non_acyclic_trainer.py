@@ -312,7 +312,7 @@ def gfn_non_acyclic_trainer(cfg, target, exp=None):
 
             # Get grads with the off-policy samples
             key, key_gen = jax.random.split(key_gen)
-            grads, (_, log_pbs_over_pfs, _, loss_other_data) = loss_bwd_grad_fn(
+            grads, (_, log_pbs_over_pfs, _, *loss_other_data) = loss_bwd_grad_fn(
                 key,
                 model_state,
                 model_state.params,
