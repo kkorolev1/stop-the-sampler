@@ -15,7 +15,11 @@ from algorithms.common.types import Array, RandomKey, ModelParams
 def sample_kernel(key_gen, mean, scale):
     key, key_gen = jax.random.split(key_gen)
     eps = jnp.clip(jax.random.normal(key, shape=(mean.shape[0],)), -4.0, 4.0)
-    return mean + jnp.dot(scale, eps), key_gen
+    if scale.ndim <= 1:
+        s = mean + scale * eps
+    else:
+        s = mean + scale @ eps
+    return s, key_gen
 
 
 def log_prob_kernel(x, mean, scale):
@@ -293,20 +297,25 @@ def loss_fn_prefix_tb(
     else:
         tb_losses = jnp.square(discrepancy)
 
-    tb_losses = tb_losses * jnp.exp(log_weights)
-    reg_terms = jnp.exp(
-        jnp.log(reg_coef)
-        + (-fwd_clf_log_probs if only_clf_reg else log_fs[:, 1:])
-        + log_weights
+    tb_losses = jnp.sum(tb_losses * jnp.exp(log_weights), axis=-1)
+    reg_terms = jnp.sum(
+        jnp.exp(
+            jnp.log(reg_coef)
+            + (-fwd_clf_log_probs if only_clf_reg else log_fs[:, 1:])
+            + log_weights
+        ),
+        axis=-1,
     )
-    losses = tb_losses.sum(-1) + reg_terms.sum(-1)
+    losses = tb_losses + reg_terms
 
     return jnp.mean(losses), (
         trajectories[:, -1],
         jax.lax.stop_gradient(-log_pfs_over_pbs).sum(-1),
         log_rewards,
+        jax.lax.stop_gradient(losses),
         jax.lax.stop_gradient(tb_losses),
-        jnp.exp(log_weights),
+        jax.lax.stop_gradient(reg_terms),
+        jax.lax.stop_gradient(jnp.exp(log_weights)),
     )
 
 
@@ -334,13 +343,17 @@ def loss_fn_db(
     else:
         db_losses = jnp.square(db_discrepancy)
 
-    losses = db_losses.mean(-1) + reg_coef * jnp.exp(log_fs[:, 1:]).mean(-1)
+    db_losses = jnp.mean(db_losses, axis=-1)
+    reg_terms = jnp.mean(reg_coef * jnp.exp(log_fs[:, 1:]), axis=-1)
+    losses = db_losses + reg_terms
 
     return jnp.mean(losses), (
         trajectories[:, -1],
         jax.lax.stop_gradient(-log_pfs_over_pbs).sum(-1),
         log_rewards,
+        jax.lax.stop_gradient(losses),
         jax.lax.stop_gradient(db_losses),
+        jax.lax.stop_gradient(reg_terms),
     )
 
 
@@ -392,13 +405,17 @@ def loss_fn_subtb(
     else:
         subtb_losses = jnp.square(subtb_discrepancy)
 
-    losses = subtb_losses.mean(-1) + reg_coef * jnp.exp(log_fs[:, 1:]).mean(-1)
+    subtb_losses = jnp.mean(subtb_losses, axis=-1)
+    reg_terms = jnp.mean(reg_coef * jnp.exp(log_fs[:, 1:]), axis=-1)
+    losses = subtb_losses + reg_terms
 
     return jnp.mean(losses), (
         trajectories[:, -1],
         jax.lax.stop_gradient(-log_pfs_over_pbs).sum(-1),
         log_rewards,
+        jax.lax.stop_gradient(losses),
         jax.lax.stop_gradient(subtb_losses),
+        jax.lax.stop_gradient(reg_terms),
     )
 
 

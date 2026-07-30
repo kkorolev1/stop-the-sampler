@@ -266,8 +266,8 @@ def gfn_non_acyclic_trainer(cfg, target, exp=None):
         if is_on_policy_iter:
             # Sample from model
             key, key_gen = jax.random.split(key_gen)
-            grads, (samples, log_iws, log_rewards, losses, *loss_weights) = (
-                loss_fwd_grad_fn(key, model_state, model_state.params)
+            grads, (samples, log_iws, log_rewards, *loss_other_data) = loss_fwd_grad_fn(
+                key, model_state, model_state.params
             )
             model_state = model_state.apply_gradients(grads=grads)
 
@@ -278,7 +278,7 @@ def gfn_non_acyclic_trainer(cfg, target, exp=None):
                     samples,
                     log_iws,
                     log_rewards,
-                    losses,
+                    loss_other_data[0],
                 )
 
             # from jax.scipy.special import logsumexp
@@ -312,7 +312,7 @@ def gfn_non_acyclic_trainer(cfg, target, exp=None):
 
             # Get grads with the off-policy samples
             key, key_gen = jax.random.split(key_gen)
-            grads, (_, log_pbs_over_pfs, _, losses, *loss_weights) = loss_bwd_grad_fn(
+            grads, (_, log_pbs_over_pfs, _, loss_other_data) = loss_bwd_grad_fn(
                 key,
                 model_state,
                 model_state.params,
@@ -328,7 +328,7 @@ def gfn_non_acyclic_trainer(cfg, target, exp=None):
                     indices,
                     (log_pbs_over_pfs.sum(-1) + log_rewards),
                     log_rewards,
-                    losses,
+                    loss_other_data[0],
                 )
             off_policy_iters += 1
         timer += time() - iter_time
@@ -342,10 +342,15 @@ def gfn_non_acyclic_trainer(cfg, target, exp=None):
                 else jnp.nan
             )
 
+            total_losses, losses, reg_terms, *loss_weights = loss_other_data
             exp.log_metrics(
                 {
-                    "loss": jnp.mean(losses),
-                    ("loss_fwd" if is_on_policy_iter else "loss_bwd"): jnp.mean(losses),
+                    "loss": jnp.mean(total_losses),
+                    ("loss_fwd" if is_on_policy_iter else "loss_bwd"): jnp.mean(
+                        total_losses
+                    ),
+                    f"loss_{alg_cfg.loss_type}": jnp.mean(losses),
+                    f"loss_reg": jnp.mean(reg_terms),
                     "logZ_learned": model_state.params["params"]["logZ"],
                     "params_l2_norm": params_norm,
                     "grads_l2_norm": grads_norm,
