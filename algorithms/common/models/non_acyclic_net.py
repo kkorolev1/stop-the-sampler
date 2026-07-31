@@ -118,11 +118,7 @@ class NonAcyclicNet(nn.Module):
             )
         else:
             fwd_clf_logits = model_output
-            if (
-                self.use_preconditioner
-                and target is not None
-                and hasattr(target, "preconditioner")
-            ):
+            if self.use_preconditioner and target is not None:
                 fwd_mean = s + (target.preconditioner @ lgv_term) * self.gamma
                 fwd_scale = jnp.sqrt(2 * self.gamma) * target.preconditioner_cholesky
             else:

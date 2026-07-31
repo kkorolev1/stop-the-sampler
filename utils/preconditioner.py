@@ -26,7 +26,7 @@ def negative_log_posterior_hessian(
     return identity + X.T @ (weights[:, None] * X)
 
 
-def compute_laplace_preconditioner(
+def compute_log_posterior_preconditioner(
     X: chex.Array,
     Y: chex.Array,
     lamda: float = 1e-4,
@@ -74,3 +74,73 @@ def compute_laplace_preconditioner(
     preconditioner_cholesky = jnp.linalg.cholesky(preconditioner)
 
     return preconditioner, preconditioner_cholesky
+
+
+def compute_preconditioner(
+    log_prob_fn,
+    dim: int,
+    *,
+    max_iters: int = 100,
+    tol: float = 1e-6,
+    lamda: float = 1e-5,
+):
+    identity = jnp.eye(dim)
+    value_and_grad_fn = jax.grad(log_prob_fn)
+    hessian_fn = jax.hessian(log_prob_fn)
+
+    converged = False
+    w = jnp.zeros(dim)
+
+    for _ in range(max_iters):
+        gradient = value_and_grad_fn(w)
+        precision = -hessian_fn(w)
+
+        # Newton step for maximizing the concave log posterior.
+        step = jnp.linalg.solve(precision + lamda * identity, gradient)
+        new_w = w + step
+
+        relative_step = jnp.linalg.norm(step) / (1.0 + jnp.linalg.norm(w))
+        w = new_w
+
+        if float(relative_step) < tol:
+            converged = True
+            break
+
+    if not converged:
+        raise RuntimeError(
+            f"MAP optimization did not converge. Increase map_max_iters " "or lamda."
+        )
+
+    precision = -hessian_fn(w)
+    regularized_precision = precision + lamda * identity
+    preconditioner = jnp.linalg.solve(regularized_precision, identity)
+    preconditioner = 0.5 * (preconditioner + preconditioner.T)
+    preconditioner_cholesky = jnp.linalg.cholesky(preconditioner)
+    return preconditioner, preconditioner_cholesky
+
+
+def compute_level_preconditioners(
+    level_log_prob_fn,
+    num_levels: int,
+    dim: int,
+    *,
+    max_iters: int = 100,
+    tol: float = 1e-6,
+    lamda: float = 1e-5,
+):
+    preconditioners = []
+    preconditioners_cholesky = []
+    for level in range(num_levels + 1):
+        level_array = jnp.asarray(level, dtype=jnp.int32)
+
+        def log_prob(x):
+            return jnp.squeeze(level_log_prob_fn(x, level_array))
+
+        preconditioner, preconditioner_cholesky = compute_preconditioner(
+            log_prob, dim, max_iters=max_iters, tol=tol, lamda=lamda
+        )
+        preconditioners.append(preconditioner)
+        preconditioners_cholesky.append(preconditioner_cholesky)
+    return jnp.stack(preconditioners, axis=0), jnp.stack(
+        preconditioners_cholesky, axis=0
+    )

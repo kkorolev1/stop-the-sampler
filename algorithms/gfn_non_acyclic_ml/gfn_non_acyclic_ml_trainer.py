@@ -28,6 +28,7 @@ from algorithms.gfn_non_acyclic_ml.utils import (
 from eval.utils import extract_last_entry
 from utils.print_utils import print_results
 from eval.discrepancies import compute_sd
+from utils.preconditioner import compute_level_preconditioners
 
 
 def gfn_non_acyclic_ml_trainer(cfg, target, exp=None):
@@ -63,7 +64,7 @@ def gfn_non_acyclic_ml_trainer(cfg, target, exp=None):
     def log_reward_fn(x):
         log_reward = original_log_reward(x)
         return jnp.where(
-            log_reward > alg_cfg.logr_clip,
+            log_reward >= alg_cfg.logr_clip,
             log_reward,
             alg_cfg.logr_clip - jnp.log(alg_cfg.logr_clip - log_reward),
         )
@@ -71,6 +72,7 @@ def gfn_non_acyclic_ml_trainer(cfg, target, exp=None):
     target.log_prob = log_reward_fn
 
     betas = jnp.linspace(0.0, 1.0, alg_cfg.num_levels + 1)
+    # betas = 1 - (1 - jnp.arange(0, alg_cfg.num_levels + 1) / alg_cfg.num_levels) ** 2
     print(f"betas: {betas}")
 
     def get_beta(l):
@@ -82,6 +84,21 @@ def gfn_non_acyclic_ml_trainer(cfg, target, exp=None):
             beta = beta[None, :]
         return beta * target.log_prob(s) + (1 - beta) * initial_dist.log_prob(s)
 
+    if alg_cfg.model.use_preconditioner:
+        preconditioners, preconditioners_cholesky = compute_level_preconditioners(
+            compute_level_log_reward, alg_cfg.num_levels, target.dim
+        )
+        target.preconditioners = preconditioners
+        target.preconditioners_cholesky = preconditioners_cholesky
+
+        for P in target.preconditioners:
+            eig_vals = jnp.linalg.eigvalsh(P)
+            print(
+                "min eig(P):",
+                float(jnp.min(eig_vals)),
+                "max eig(P):",
+                float(jnp.max(eig_vals)),
+            )
     aux_tuple = (alg_cfg.logr_clip, compute_level_log_reward)
 
     # Initialize the buffer

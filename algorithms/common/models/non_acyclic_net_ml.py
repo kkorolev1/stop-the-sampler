@@ -77,6 +77,7 @@ class NonAcyclicNetML(nn.Module):
     def _parse_fwd_pred(
         self,
         s,
+        l,
         model_output,
         lgv_term,
         force_stop=False,
@@ -116,13 +117,14 @@ class NonAcyclicNetML(nn.Module):
             )
         else:
             fwd_clf_logits = model_output
-            if (
-                self.use_preconditioner
-                and target is not None
-                and hasattr(target, "preconditioner")
-            ):
-                fwd_mean = s + (target.preconditioner @ lgv_term) * self.gamma
-                fwd_scale = jnp.sqrt(2 * self.gamma) * target.preconditioner_cholesky
+            if self.use_preconditioner and target is not None:
+                fwd_mean = (
+                    s + (target.preconditioners.at[l + 1].get() @ lgv_term) * self.gamma
+                )
+                fwd_scale = (
+                    jnp.sqrt(2 * self.gamma)
+                    * target.preconditioners_cholesky.at[l + 1].get()
+                )
             else:
                 fwd_mean = s + lgv_term * self.gamma
                 fwd_scale = jnp.sqrt(2 * self.gamma)
@@ -172,6 +174,7 @@ class NonAcyclicNetML(nn.Module):
         force_stop=False,
         target=None,
     ):
+        l_int = l
         l = l.astype(jnp.float32) / self.num_levels
         level_array_emb = self.get_fourier_features(l)
         if len(s.shape) == 1:
@@ -183,6 +186,7 @@ class NonAcyclicNetML(nn.Module):
             model_output = self.fwd_state_net(self.backbone(s_ext))
             fwd_clf_logits, fwd_mean, fwd_scale = self._parse_fwd_pred(
                 s,
+                l_int,
                 model_output,
                 lgv_term,
                 force_stop,

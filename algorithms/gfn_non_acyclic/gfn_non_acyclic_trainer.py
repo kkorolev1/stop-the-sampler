@@ -27,10 +27,12 @@ from algorithms.gfn_non_acyclic.gfn_non_acyclic_rnd import (
 from algorithms.gfn_non_acyclic.utils import visualize_heatmaps
 from eval.discrepancies import compute_sd
 from eval.utils import extract_last_entry
+from utils import preconditioner
 from utils.print_utils import print_results
 import os
 import pickle
 from flax import serialization
+from utils.preconditioner import compute_preconditioner
 
 
 def get_checkpoint_dir(cfg):
@@ -95,11 +97,24 @@ def gfn_non_acyclic_trainer(cfg, target, exp=None):
     aux_tuple = (alg_cfg.logr_clip,)
 
     original_log_reward = target.log_prob
+    if alg_cfg.model.use_preconditioner:
+        preconditioner, preconditioner_cholesky = compute_preconditioner(
+            original_log_reward, target.dim, max_iters=100, tol=1e-6, lamda=1e-4
+        )
+        target.preconditioner = preconditioner
+        target.preconditioner_cholesky = preconditioner_cholesky
+        eig_vals = jnp.linalg.eigvalsh(target.preconditioner)
+        print(
+            "min eig(P):",
+            float(jnp.min(eig_vals)),
+            "max eig(P):",
+            float(jnp.max(eig_vals)),
+        )
 
     def log_reward_fn(x):
         log_reward = original_log_reward(x)
         return jnp.where(
-            log_reward > alg_cfg.logr_clip,
+            log_reward >= alg_cfg.logr_clip,
             log_reward,
             alg_cfg.logr_clip - jnp.log(alg_cfg.logr_clip - log_reward),
         )
