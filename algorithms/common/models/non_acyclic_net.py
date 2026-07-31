@@ -18,6 +18,7 @@ class NonAcyclicNet(nn.Module):
     fwd_log_var_range: float = 4.0
     bwd_log_var_range: float = 4.0
     learn_fwd: bool = True
+    learn_bwd: bool = True
     use_preconditioner: bool = False
     shared_model: bool = False
 
@@ -28,7 +29,7 @@ class NonAcyclicNet(nn.Module):
         self.fwd_pred_dim = (
             1 + 2 * self.dim + (self.dim if self.use_lp else 0) if self.learn_fwd else 1
         )
-        self.bwd_pred_dim = 1 + 2 * self.dim
+        self.bwd_pred_dim = 1 + 2 * self.dim + (self.dim if self.learn_bwd else 0)
         if self.shared_model:
             self.state_net = nn.Sequential(
                 [
@@ -138,18 +139,32 @@ class NonAcyclicNet(nn.Module):
         if self.shared_model:
             _, model_output = jnp.split(model_output, [self.fwd_pred_dim], axis=-1)
 
-        (
-            bwd_clf_logits,
-            bwd_mean_corr,
-            bwd_scale_corr,
-        ) = jnp.split(
-            model_output,
-            [1, 1 + self.dim],
-            axis=-1,
-        )
-        # fmt: off
-        bwd_drift = jnp.clip(-nn.softplus(bwd_mean_corr) * s, -self.outer_clip, self.outer_clip)
-        # bwd_drift = jnp.clip(bwd_mean_corr, -self.outer_clip, self.outer_clip)
+        if self.learn_bwd:
+            (
+                bwd_clf_logits,
+                bwd_rate,
+                bwd_residual,
+                bwd_scale_corr,
+            ) = jnp.split(
+                model_output,
+                [1, 1 + self.dim, 1 + 2 * self.dim],
+                axis=-1,
+            )
+            # fmt: off
+            bwd_drift = jnp.clip(bwd_residual - nn.softplus(bwd_rate) * s, -self.outer_clip, self.outer_clip)
+        else:
+            (
+                bwd_clf_logits,
+                bwd_rate,
+                bwd_scale_corr,
+            ) = jnp.split(
+                model_output,
+                [1, 1 + self.dim],
+                axis=-1,
+            )
+            bwd_drift = jnp.clip(
+                -nn.softplus(bwd_rate) * s, -self.outer_clip, self.outer_clip
+            )
         bwd_mean = s + bwd_drift * self.gamma
         bwd_scale = jnp.sqrt(
             jnp.exp(self.bwd_log_var_range * nn.tanh(bwd_scale_corr)) * self.gamma

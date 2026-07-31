@@ -10,6 +10,7 @@ bias_init: 0.1
 
 gamma: ${target.gfn_non_acyclic.gamma}
 learn_fwd: True
+learn_bwd: True
 shared_model: False
 use_preconditioner: False
 

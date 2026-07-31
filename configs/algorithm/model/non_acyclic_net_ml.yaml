@@ -11,6 +11,7 @@ bias_init: 0.1
 gamma: ${target.gfn_non_acyclic.gamma}
 num_levels: 2
 learn_fwd: True
+learn_bwd: True
 
 fwd_log_var_range: 4
 bwd_log_var_range: 4
