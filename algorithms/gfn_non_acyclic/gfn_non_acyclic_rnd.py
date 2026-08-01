@@ -14,7 +14,7 @@ from algorithms.common.types import Array, RandomKey, ModelParams
 
 def sample_kernel(key_gen, mean, scale):
     key, key_gen = jax.random.split(key_gen)
-    eps = jnp.clip(jax.random.normal(key, shape=(mean.shape[0],)), -4.0, 4.0)
+    eps = jax.random.normal(key, shape=(mean.shape[0],))
     if scale.ndim <= 1:
         s = mean + scale * eps
     else:
