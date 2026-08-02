@@ -168,7 +168,7 @@ class NonAcyclicNetML(nn.Module):
             )
         bwd_mean = s + bwd_drift * self.gamma
         bwd_scale = jnp.sqrt(
-            jnp.exp(self.bwd_log_var_range * nn.tanh(bwd_scale_corr)) * self.gamma
+            2 * jnp.exp(self.bwd_log_var_range * nn.tanh(bwd_scale_corr)) * self.gamma
         )
         bwd_mean = jnp.clip(bwd_mean, -self.mean_clip, self.mean_clip)
         bwd_clf_logits = bwd_clf_logits.squeeze(-1)
