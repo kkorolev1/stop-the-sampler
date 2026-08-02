@@ -169,12 +169,21 @@ class NonAcyclicNetML(nn.Module):
                 -nn.softplus(bwd_rate) * s, -self.outer_clip, self.outer_clip
             )
         bwd_mean = s + bwd_drift * self.gamma
-        # bwd_scale = jnp.sqrt(
-        #     2 * jnp.exp(self.bwd_log_var_range * nn.tanh(bwd_scale_corr)) * self.gamma
-        # )
-        bwd_scale = (
-            jnp.sqrt(2.0 * self.gamma) * target.preconditioners_cholesky.at[l].get()
-        )
+        if self.use_preconditioner and target is not None:
+            diagonal_correction = jnp.exp(
+                0.5 * self.bwd_log_var_range * nn.tanh(bwd_scale_corr)
+            )
+            bwd_scale = (
+                jnp.sqrt(2.0 * self.gamma)
+                * target.preconditioners_cholesky.at[l].get()
+                * diagonal_correction[None, :]
+            )
+        else:
+            bwd_scale = jnp.sqrt(
+                2
+                * jnp.exp(self.bwd_log_var_range * nn.tanh(bwd_scale_corr))
+                * self.gamma
+            )
         bwd_mean = jnp.clip(bwd_mean, -self.mean_clip, self.mean_clip)
         bwd_clf_logits = bwd_clf_logits.squeeze(-1)
         bwd_clf_logits = jnp.clip(bwd_clf_logits, min=self.min_clf_logits)
