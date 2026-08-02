@@ -99,6 +99,8 @@ class NonAcyclicNetML(nn.Module):
                     [1, 1 + self.dim, 1 + 2 * self.dim],
                     axis=-1,
                 )
+                if self.use_preconditioner and target is not None:
+                    lgv_term = target.preconditioners.at[l].get() @ lgv_term
                 fwd_drift = fwd_drift + (1 + fwd_lgv_scale) * lgv_term
             else:
                 (
