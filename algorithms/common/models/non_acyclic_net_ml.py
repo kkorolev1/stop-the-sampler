@@ -119,15 +119,17 @@ class NonAcyclicNetML(nn.Module):
         else:
             fwd_clf_logits = model_output
             if self.use_preconditioner and target is not None:
-                fwd_mean = (
-                    s + (target.preconditioners.at[l].get() @ lgv_term) * self.gamma
-                )
+                fwd_drift = target.preconditioners.at[l].get() @ lgv_term
+                fwd_drift = jnp.clip(fwd_drift, -self.outer_clip, self.outer_clip)
+                fwd_mean = s + fwd_drift * self.gamma
                 fwd_scale = (
                     jnp.sqrt(2 * self.gamma)
                     * target.preconditioners_cholesky.at[l].get()
                 )
             else:
-                fwd_mean = s + lgv_term * self.gamma
+                fwd_drift = lgv_term
+                fwd_drift = jnp.clip(fwd_drift, -self.outer_clip, self.outer_clip)
+                fwd_mean = s + fwd_drift * self.gamma
                 fwd_scale = jnp.sqrt(2 * self.gamma)
 
         fwd_mean = jnp.clip(fwd_mean, -self.mean_clip, self.mean_clip)
