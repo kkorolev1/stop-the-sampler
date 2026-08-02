@@ -63,11 +63,12 @@ def gfn_non_acyclic_ml_trainer(cfg, target, exp=None):
 
     def log_reward_fn(x):
         log_reward = original_log_reward(x)
-        return jnp.where(
-            log_reward >= alg_cfg.logr_clip,
-            log_reward,
-            alg_cfg.logr_clip - jnp.log(alg_cfg.logr_clip - log_reward),
-        )
+        return log_reward
+        # return jnp.where(
+        #     log_reward >= alg_cfg.logr_clip,
+        #     log_reward,
+        #     alg_cfg.logr_clip - jnp.log(alg_cfg.logr_clip - log_reward),
+        # )
 
     target.log_prob = log_reward_fn
 

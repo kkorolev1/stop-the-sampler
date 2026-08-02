@@ -141,7 +141,7 @@ class NonAcyclicNetML(nn.Module):
 
         return fwd_clf_logits, fwd_mean, fwd_scale
 
-    def _parse_bwd_pred(self, s, model_output, force_stop=False):
+    def _parse_bwd_pred(self, s, l, model_output, force_stop=False, target=None):
         if self.learn_bwd:
             (
                 bwd_clf_logits,
@@ -169,8 +169,11 @@ class NonAcyclicNetML(nn.Module):
                 -nn.softplus(bwd_rate) * s, -self.outer_clip, self.outer_clip
             )
         bwd_mean = s + bwd_drift * self.gamma
-        bwd_scale = jnp.sqrt(
-            2 * jnp.exp(self.bwd_log_var_range * nn.tanh(bwd_scale_corr)) * self.gamma
+        # bwd_scale = jnp.sqrt(
+        #     2 * jnp.exp(self.bwd_log_var_range * nn.tanh(bwd_scale_corr)) * self.gamma
+        # )
+        bwd_scale = (
+            jnp.sqrt(2.0 * self.gamma) * target.preconditioners_cholesky.at[l].get()
         )
         bwd_mean = jnp.clip(bwd_mean, -self.mean_clip, self.mean_clip)
         bwd_clf_logits = bwd_clf_logits.squeeze(-1)
@@ -216,4 +219,4 @@ class NonAcyclicNetML(nn.Module):
             return fwd_clf_logits, fwd_mean, fwd_scale, log_flow
         else:
             model_output = self.bwd_state_net(self.backbone(s_ext))
-            return self._parse_bwd_pred(s, model_output, force_stop)
+            return self._parse_bwd_pred(s, l_int, model_output, force_stop, target)

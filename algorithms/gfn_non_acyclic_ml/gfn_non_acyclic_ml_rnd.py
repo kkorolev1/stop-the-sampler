@@ -15,7 +15,7 @@ from algorithms.gfn_non_acyclic.sampling_utils import binary_search_smoothing
 
 def sample_kernel(key_gen, mean, scale):
     key, key_gen = jax.random.split(key_gen)
-    eps = jnp.clip(jax.random.normal(key, shape=(mean.shape[0],)), -4.0, 4.0)
+    eps = jax.random.normal(key, shape=(mean.shape[0],))
     if scale.ndim <= 1:
         s = mean + scale * eps
     else:
@@ -65,7 +65,9 @@ def per_sample_rnd_train(
         )
 
     def model_backward(s_next, l_next):
-        return model_state.apply_fn(params, s_next, l_next, predict_fwd=False)
+        return model_state.apply_fn(
+            params, s_next, l_next, predict_fwd=False, target=target
+        )
 
     def compute_log_reward_and_langevin(s, l):
         if use_lp:
@@ -420,7 +422,12 @@ def per_sample_rnd_eval(
 
     def model_backward(s_next, l_next, force_stop=False):
         return model_state.apply_fn(
-            params, s_next, l_next, predict_fwd=False, force_stop=force_stop
+            params,
+            s_next,
+            l_next,
+            predict_fwd=False,
+            force_stop=force_stop,
+            target=target,
         )
 
     def compute_log_reward_and_langevin(s, l):
