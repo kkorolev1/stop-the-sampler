@@ -115,9 +115,21 @@ class NonAcyclicNetML(nn.Module):
             # fmt: off
             fwd_drift = jnp.clip(fwd_drift, -self.outer_clip, self.outer_clip)
             fwd_mean = s + fwd_drift * self.gamma
-            fwd_scale = jnp.sqrt(
-                2 * jnp.exp(self.fwd_log_var_range * nn.tanh(fwd_scale_corr)) * self.gamma
-            )
+            if self.use_preconditioner and target is not None:
+                diag_scale_corr = jnp.exp(
+                    0.5
+                    * self.fwd_log_var_range
+                    * nn.tanh(fwd_scale_corr)
+                )
+                fwd_scale = (
+                    jnp.sqrt(2.0 * self.gamma)
+                    * target.preconditioners_cholesky.at[l].get()
+                    * diag_scale_corr[None, :]
+                )
+            else:
+                fwd_scale = jnp.sqrt(
+                    2 * jnp.exp(self.fwd_log_var_range * nn.tanh(fwd_scale_corr)) * self.gamma
+                )
         else:
             fwd_clf_logits = model_output
             if self.use_preconditioner and target is not None:
